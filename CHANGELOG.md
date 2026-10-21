@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.4 — "Aim Up"
+**Wed Oct 21, 2026 · 7:55 AM HST**
+
+- **The crosshair follows your mouse (or finger) up and down too,** and a shot has to land on the enemy's body to hit. Removed: the crosshair stuck on one row, and hits that counted anywhere above or below an enemy.
+
+---
+
 ## v0.3.3 — "Trigger Happy"
 **Wed Oct 21, 2026 · 7:50 AM HST**
 

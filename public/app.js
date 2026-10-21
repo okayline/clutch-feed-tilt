@@ -22,7 +22,7 @@ function build() {
   // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down.
   const s = squad, t0 = cor.t0;
   P = {
-    y: C.START, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, jit: 0, flash: 0, hurt: 0,
+    y: C.START, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
     left: C.ENEMIES, phase: "push", done: null, log: [],
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
@@ -88,7 +88,7 @@ function render() {
     if (e.state === "dead" || sh < 1) continue;
     const bot = Math.round(H / 2 + H / (2 * ry)), top = Math.round(bot - sh);
     const l = Math.round(sxc - sw / 2), rr = Math.round(sxc + sw / 2);
-    e.sx = [l, rr]; e.sd = ry;
+    e.sx = [l, rr]; e.sy = [top, bot]; e.sd = ry;
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       const u = (x - l) / Math.max(1, rr - l);
@@ -105,7 +105,7 @@ function render() {
     if (e.state === "out" && e.fire < 0.7 && Math.floor(P.t * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
   // crosshair
-  const ax = Math.round(P.aim + P.jit), ay = Math.floor(H / 2) - 1;
+  const ax = Math.round(P.aim + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
@@ -193,20 +193,20 @@ function showBanner(lines, secs) {
 }
 
 // ---- play ---------------------------------------------------------------------------------------------------
-function shoot(col) {
+function shoot(col, row) {
   if (P.done) return;
   P.shots++; P.flash = 0.08;
-  const c = Math.round(col + P.jit);
+  const c = Math.round(col + P.jit), r = Math.round(row);
   const hit = enemies.filter((e) => e.state === "out" || e.state === "stepping")
-    .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)
+    .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && r >= e.sy[0] - 1 && r <= e.sy[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)
     .sort((a, b) => a.sd - b.sd)[0];
   if (hit) {
     hit.state = "dying"; hit.dieT = 0; P.hits++; P.streak = 0; P.left--;
     say("YOU got a kill", "b");
-    P.log.push([+P.t.toFixed(2), c, 1]);
+    P.log.push([+P.t.toFixed(2), c, r, 1]);
   } else {
     P.streak++;
-    P.log.push([+P.t.toFixed(2), c, 0]);
+    P.log.push([+P.t.toFixed(2), c, r, 0]);
     if (P.streak === 3) say("you're tilting...", "g");
   }
 }
@@ -260,9 +260,10 @@ function loop(ts) {
 }
 
 const view = $("view");
-const colOf = (ev) => { const r = view.getBoundingClientRect(); return (ev.clientX - r.left) / r.width * W; };
-view.addEventListener("pointermove", (ev) => { if (P) P.aim = colOf(ev); });
-view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); P.aim = colOf(ev); shoot(P.aim); });
+// where the pointer is, in the view's half-size character cells
+const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = (ev.clientX - r.left) / r.width * W; P.aimY = Math.max(1, Math.min(H - 2, (ev.clientY - r.top) / r.height * H)); };
+view.addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
+view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
 // a click on a message box closes it (and isn't a shot)
 $("bannerText").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 $("again").addEventListener("click", () => { if (!P) return; build(); $("banner").hidden = true; bannerT = 0; });
