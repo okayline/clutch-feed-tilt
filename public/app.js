@@ -252,8 +252,9 @@ function shoot(col, row) {
   P.flash = 0.08;
   const was = P.streak;
   const hit = C.fire(P, col, row);
-  if (hit === "head") { P.left--; say("YOU got a HEADSHOT", "b"); }
+  if (hit === "headkill") { P.left--; say("YOU got a HEADSHOT kill", "b"); }
   else if (hit === "kill") { P.left--; say("YOU got a kill", "b"); }
+  else if (hit === "head") say("YOU hit ENEMY in the head", "t");
   else if (hit === "body") say("YOU hit ENEMY", "t");
   else if (hit === false && was < C.TILT_HALF && P.streak >= C.TILT_HALF) say("you're tilted", "g");
 }

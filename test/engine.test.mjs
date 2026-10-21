@@ -92,15 +92,18 @@ test("replay: the same shots give the same run as playing it live, on every map 
   }
 });
 
-test("an enemy takes 3 body shots, or 1 headshot", () => {
+test("an enemy takes 3 body shots, or a headshot and a body shot; a headshot alone doesn't drop it", () => {
   const cor = C.corridor(12345, "2026-10-21"), R = C.newRun(cor);
   while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
-  const [a, b] = R.enemies.filter((e) => e.state === "out" || e.state === "stepping"), eye = C.eyeOf(R), box = C.enemyBox(eye, a);
+  const a = R.enemies.find((e) => e.state === "out"), box = C.enemyBox(C.eyeOf(R), a);
   const legs = Math.round(box.bot - 1), mid = Math.round(box.sxc);   // the bottom row, the middle column: body, not head
   assert.deepEqual([C.fire(R, mid, legs), C.fire(R, mid, legs), C.fire(R, mid, legs)], ["body", "body", "kill"]);
   assert.equal(a.state, "dying");
-  if (b) { const bb = C.enemyBox(eye, b); assert.equal(C.fire(R, Math.round(bb.sxc), bb.top), "head"); assert.equal(b.state, "dying"); }
-  assert.deepEqual([R.hits, R.kills, R.heads], [b ? 4 : 3, b ? 2 : 1, b ? 1 : 0]);
+  while (!R.over && !R.enemies.some((e) => e.state === "out")) C.tick(R);   // on to the next enemy
+  const b = R.enemies.find((e) => e.state === "out"), bb = C.enemyBox(C.eyeOf(R), b), bl = Math.round(bb.bot - 1), bm = Math.round(bb.sxc);
+  assert.deepEqual([C.fire(R, bm, bb.top), C.fire(R, bm, bl)], ["head", "kill"], "a headshot (2) leaves it up; a body shot (1) then drops it");
+  assert.equal(b.state, "dying");
+  assert.deepEqual([R.hits, R.kills, R.heads], [5, 2, 1]);
 });
 
 test("tilt: a miss adds 0.5 with no enemy on the view; with one on it, 1.5 and at least half the bar (2.5)", () => {

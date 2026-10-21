@@ -201,7 +201,7 @@ export const SPEED = 1.25 / FPS;      // tiles along the rails per tick
 const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ticks
 const FIRE_TICKS = 25;                // then fires every 25 ticks
 const DIE_TICKS = 8;
-export const ENEMY_HP = 3;            // body shots to drop an enemy; a headshot drops it in one
+export const ENEMY_HP = 3, HEAD_DMG = 2;   // body shots to drop an enemy; a headshot counts 2, so chest then head (a double tap) drops it
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.5, TILT_HALF = 2.5;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; half the bar
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
 export const MAX_TICKS = 9000;        // ten minutes: no run is longer
@@ -287,8 +287,8 @@ export function tick(R) {
 export const onHead = (b, c, r) => r >= b.top - 1 && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
 
 // A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns false for a
-// miss, "body" for a body shot that leaves the enemy up, "kill" for the shot that drops it, "head" for a headshot (it
-// drops it), or null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
+// miss, "body" or "head" for a hit that leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a
+// headshot that drops it, or null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
 export function fire(R, col, row) {
   if (R.over) return null;
   const q = (v) => Math.round(v * 100) / 100;
@@ -303,9 +303,9 @@ export function fire(R, col, row) {
   let got = false;
   if (hit) {
     const head = onHead(hit.b, c, r);
-    hit.e.hp = head ? 0 : hit.e.hp - 1; R.hits++;
+    hit.e.hp -= head ? HEAD_DMG : 1; R.hits++;
     if (head) R.heads++;
-    got = head ? "head" : hit.e.hp > 0 ? "body" : "kill";
+    got = hit.e.hp > 0 ? (head ? "head" : "body") : head ? "headkill" : "kill";
     if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }
     // tilt comes down by half on a hit, and all the way on the second hit in a row
     R.calm++; R.streak = R.calm >= 2 ? 0 : Math.floor(Math.min(5, R.streak) / 2);

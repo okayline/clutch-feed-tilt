@@ -7,7 +7,7 @@ Newest first. Times are Hawaii time (HST).
 ## v0.10 — "Headshots"
 **Wed Oct 21, 2026 · 1:35 PM HST**
 
-- An enemy takes 3 body shots to drop. A shot on its head (the @) drops it in one, and the feed says HEADSHOT. A body shot that doesn't drop it says YOU hit ENEMY. Removed: every hit killing.
+- An enemy takes 3 body shots to drop. A shot on its head (the @) counts as 2, so a double tap (a body shot and a headshot) drops it; a headshot alone doesn't. The feed says YOU hit ENEMY, YOU hit ENEMY in the head, or HEADSHOT kill. Removed: every hit killing.
 - HITS now counts every shot that lands, body shots included. Removed: the "enemies still up" line on an already sealed FEED run (the sealed run doesn't keep kills).
 - A miss while an enemy is on screen adds more tilt and always leaves the TILT bar at least half full; a shot at nothing adds less. The TILT bar has 10 cells, one per half point. Removed: every miss adding the same 1, and the 5-cell bar.
 - The K column next to your name shows your kills. Removed: it showing hits.
