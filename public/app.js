@@ -47,12 +47,12 @@ function build() {
   const s = squad, t0 = cor.t0;
   Object.assign(P, {
     script: [
-      [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
-      [t0 + 1.2, () => { s[3].dead = true; say(`BOT_FEEDER died`, "e"); }],
-      [t0 + 2.0, () => { s[1].dead = true; say(`${s[1].n} died`, "e"); }],
-      [t0 + 2.7, () => { s[2].k++; P.left--; say(`${s[2].n} got a kill`, "h"); }],
-      [t0 + 3.3, () => { s[2].dead = true; say(`${s[2].n} died`, "e"); }],
-      [t0 + 3.9, () => { s[0].dead = true; say(`${s[0].n} died`, "e"); clutchMoment(); }],
+      [t0, () => { s[0].k++; P.left--; say(`${s[0].n} fragged ENEMY`, "h"); }],
+      [t0 + 1.2, () => { s[3].dead = true; say(`BOT_FEEDER got gibbed`, "e"); }],
+      [t0 + 2.0, () => { s[1].dead = true; say(`${s[1].n} was fragged`, "e"); }],
+      [t0 + 2.7, () => { s[2].k++; P.left--; say(`${s[2].n} fragged ENEMY`, "h"); }],
+      [t0 + 3.3, () => { s[2].dead = true; say(`${s[2].n} was fragged`, "e"); }],
+      [t0 + 3.9, () => { s[0].dead = true; say(`${s[0].n} was fragged`, "e"); clutchMoment(); }],
     ].map(([t, fn]) => [C.ticksOf(t), fn]),
   });
   feed = [];
@@ -60,7 +60,7 @@ function build() {
 function say(t, c) { feed.push([t.slice(0, 77), c]); if (feed.length > 3) feed.shift(); }
 
 function clutchMoment() {
-  showBanner([["", ""], ["   1 v " + P.left + "   ", "big g"], ["", ""], ["  LAST ONE ALIVE  ", "b"]], 1.6);
+  showBanner([["", ""], ["   1 v " + P.left + "   ", "big g"], ["", ""], ["LAST MAN STANDING", "b"]], 1.6);
 }
 
 // ---- drawing the view ---------------------------------------------------------------------------------------
@@ -111,7 +111,7 @@ function render() {
         const f = (y - top) / Math.max(1, sh);
         let c = "";
         if (e.state === "dying") c = "%";
-        else if (f < 0.22) c = Math.abs(u - 0.5) < 0.2 ? "@" : "";
+        else if (f < C.HEAD) c = Math.abs(u - 0.5) < C.HEAD_W ? "@" : "";
         else if (f < 0.6) c = Math.abs(u - 0.5) < 0.36 ? "#" : (f > 0.3 && f < 0.42 && u > 0.5) ? "=" : "";
         else c = (Math.abs(u - 0.3) < 0.11 || Math.abs(u - 0.7) < 0.11) ? "|" : "";
         if (c) put(x, y, c, "e");
@@ -173,13 +173,13 @@ function frame(message) {
   }
   const rule = " " + "-".repeat(PW - 2) + " ";
   const hpBar = "[" + "#".repeat(P.hp) + " ".repeat(C.HP - P.hp) + "]";
-  const tilt = Math.min(5, P.streak);
+  const tilt = Math.floor(Math.min(5, P.streak));
   const secs = P.tick / C.FPS, time = `${Math.floor(secs / 60)}:${(secs % 60).toFixed(1).padStart(4, "0")}`;
   const acc = P.shots ? Math.round(100 * P.hits / P.shots) : 0;
   const rows = [
     [[" SQUAD", ""], ["            HP    K", "t"]],
     [[rule, "d"]],
-    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.hits), "b"]],
+    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.kills ?? "-"), "b"]],
     ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
                          [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
     [[rule, "d"]],
@@ -193,8 +193,8 @@ function frame(message) {
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
     : ledgerOpen() ? [[" LEDGER: EVERY SEALED DAY AND RUN. THE RUN WAITS.", "t"]]
     : P.done ? [[" RUN OVER. ", "b"], [P.seal || "", "t"]]
-    : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
-    : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
+    : P.phase === "push" ? [[" SQUAD IS MOVING IN", "t"], ["   TARGETS LEFT " + P.left, "e"], ["   CLICK TO FRAG", "d"]]
+    : [[" 1v" + P.left + " ", "g"], ["LAST MAN STANDING", "b"], ["   TARGETS LEFT " + P.left, "e"], ["   CLICK TO FRAG", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
   const again = P.done && !over ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
   const buttons = over ? [["[ESC] CLOSE", "btn", "esc"]] : [["[L]EDGER", "btn", "l"], ["  ", ""], ["[U]SER", "btn", "u"]];
@@ -250,29 +250,34 @@ function showBanner(lines, secs) {
 function shoot(col, row) {
   if (P.done) return;
   P.flash = 0.08;
+  const was = P.streak;
   const hit = C.fire(P, col, row);
-  if (hit) { P.left--; say("YOU got a kill", "b"); }
-  else if (hit === false && P.streak === 3) say("you're tilted", "g");
+  if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
+  else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
+  else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
+  else if (hit === "body") say("YOU tagged ENEMY", "t");
+  else if (hit === "miss") say("YOU whiffed", "d");
+  if ((hit === false || hit === "miss") && was < C.TILT_HALF && P.streak >= C.TILT_HALF) say("you're on TILT", "g");
 }
 
 function finish() {
   P.done = C.label(P);
   endBanner(P.done);
-  if (P.practice) P.seal = "PRACTICE, NOT SEALED."; else seal();
+  if (P.practice) P.seal = "PRACTICE MODE. NOT SEALED."; else seal();
 }
 
 // After the run is over: play today's corridor again, as practice. It's never sent, so today's sealed run stays.
 function runItBack() {
   build(); P.practice = true;
   $("banner").hidden = true; bannerT = 0;
-  say("Practice run: it isn't sealed. Your sealed run stays as it was.", "t");
+  say("PRACTICE MODE: this one doesn't count. Your sealed run stays.", "t");
 }
 
 function endBanner(kind) {
   const lines = {
-    CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`1v3 ON ${P.hp} HP`, "b"], [`${P.hits} hits from ${P.shots} shots`, "t"]],
-    TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["Won it, but the crosshair", "b"], ["was shaking the whole time.", "b"]],
-    FEED: [["", ""], [" FEED ", "big e"], ["", ""], ["Gave away free kills.", "b"], [`${P.left} ${P.left === 1 ? "enemy" : "enemies"} still up`, "t"]],
+    CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`1v3 ON ${P.hp} HP`, "b"], [`${P.hits} HITS / ${P.shots} SHOTS`, "t"]],
+    TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["YOU WON BY SPRAYING", "b"], ["AND PRAYING.", "b"]],
+    FEED: [["", ""], [" FEED ", "big e"], ["", ""], ["YOU GOT FRAGGED.", "b"], P.left === null ? ["", ""] : [`${P.left} ${P.left === 1 ? "TARGET" : "TARGETS"} STILL STANDING`, "t"]],
   }[kind];
   lines.push(["", ""]);
   showBanner(lines, Infinity);
@@ -286,21 +291,21 @@ function seal() {
   fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(run) })
     .then(async (r) => [r.ok, await r.json()])
     .then(([ok, b]) => {
-      if (!ok) { P.seal = "NOT SEALED."; say(b.error || "The server said no.", "e"); return; }
+      if (!ok) { P.seal = "NOT SEALED."; say(b.error || "SERVER SAYS NO.", "e"); return; }
       P.seal = `SEALED: LEDGER ENTRY #${b.run.entry}`;
       if (b.run.hits !== P.hits || b.run.hp !== P.hp || b.run.shots !== P.shots) {
         Object.assign(P, { hp: b.run.hp, shots: b.run.shots, hits: b.run.hits, done: b.run.label });
-        say(`The server's replay: ${b.run.label}, ${b.run.hits} hits from ${b.run.shots} shots.`, "g"); endBanner(b.run.label);
+        say(`SERVER REPLAY: ${b.run.label}, ${b.run.hits} HITS / ${b.run.shots} SHOTS.`, "g"); endBanner(b.run.label);
       }
       say(`Sealed as ledger entry #${b.run.entry} (${b.run.hash.slice(0, 8)}).`, "b");
     })
-    .catch(() => { P.seal = "NOT SEALED."; say("Couldn't reach the server, so this run wasn't sealed.", "e"); });
+    .catch(() => { P.seal = "NOT SEALED."; say("CONNECTION LOST. This run wasn't sealed.", "e"); });
 }
 
 // Today's run is already sealed: show it, and no new run until tomorrow's corridor.
 function showSealed(run) {
   build();
-  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, left: enemies.length - run.hits, script: [], phase: "clutch", done: run.label,
+  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, kills: run.label === "FEED" ? null : enemies.length, left: null, script: [], phase: "clutch", done: run.label,
                      seal: `TODAY'S RUN IS SEALED: ENTRY #${run.entry}` });
   enemies.forEach((e) => e.state = "dead"); squad.forEach((m) => m.dead = true);
   say(`Sealed as ledger entry #${run.entry} (${run.hash.slice(0, 8)}). Next corridor at midnight UTC.`, "b");
@@ -315,7 +320,7 @@ function step(dt) {
   if (P.done) return;
   for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
     for (const ev of C.tick(P)) if (ev === "hurt") {
-      P.hurt = 0.25; say("ENEMY hit YOU", "e");
+      P.hurt = 0.25; say("ENEMY tagged YOU", "e");
       if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
     }
     while (P.script.length && P.script[0][0] <= P.tick) P.script.shift()[1]();

@@ -4,6 +4,17 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.10 — "Double Tap"
+**Wed Oct 21, 2026 · 1:50 PM HST**
+
+- An enemy takes 3 body shots to drop. A shot on its head (the @) counts as 2, so a double tap (a body shot and a headshot) drops it; a headshot alone doesn't. The feed says YOU tagged ENEMY, YOU nailed ENEMY in the head, YOU fragged ENEMY or HEADSHOT!! YOU fragged ENEMY. Removed: every hit killing.
+- HITS now counts every shot that lands, body shots included. Removed: the "enemies still up" line on an already sealed FEED run (the sealed run doesn't keep kills).
+- A miss while an enemy is on screen adds more tilt and always leaves the TILT bar at least 3 of 5; a shot at nothing adds only a quarter. Removed: every miss adding the same 1.
+- A headshot is only the @ itself. Far away, where the head is a row or two, that's a hard shot. Removed: the spare row above the head counting as head.
+- The kill feed, banners and status line talk like a 90s shooter (fragged, tagged, nailed, gibbed, LAST MAN STANDING, CLICK TO FRAG). A miss with an enemy on screen says YOU whiffed. Removed: the old wording, and the last kill line staying up after misses (it looked like every headshot was a kill).
+- The mouse pointer is hidden over the 3D view, so only the game's crosshair shows. Removed: the desktop crosshair cursor on top of it.
+- The K column next to your name shows your kills. Removed: it showing hits.
+
 ## v0.9.5 — "Plus Corners"
 **Wed Oct 21, 2026 · 1:10 PM HST**
 
