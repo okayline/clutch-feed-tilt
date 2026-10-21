@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.3 — "Trigger Happy"
+**Wed Oct 21, 2026 · 7:50 AM HST**
+
+- **Clicks shoot from the start of the run,** while your squad is still pushing in. Those shots count in SHOTS, ACC and the TILT meter like any other. Removed: the first few seconds where clicks did nothing.
+
+---
+
 ## v0.3.2 — "Click Away"
 **Wed Oct 21, 2026 · 7:50 AM HST**
 

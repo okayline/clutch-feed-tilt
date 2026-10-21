@@ -194,7 +194,7 @@ function showBanner(lines, secs) {
 
 // ---- play ---------------------------------------------------------------------------------------------------
 function shoot(col) {
-  if (P.done || P.phase === "push") return;
+  if (P.done) return;
   P.shots++; P.flash = 0.08;
   const c = Math.round(col + P.jit);
   const hit = enemies.filter((e) => e.state === "out" || e.state === "stepping")
