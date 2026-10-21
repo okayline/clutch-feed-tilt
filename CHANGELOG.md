@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.2 — "Stutter"
+**Wed Oct 21, 2026 · 8:51 AM HST**
+
+- Turns jump round in six steps, like an old game at a low frame rate. Removed: the smooth turn.
+
 ## v0.5.1 — "Rib Lines"
 **Wed Oct 21, 2026 · 8:49 AM HST**
 

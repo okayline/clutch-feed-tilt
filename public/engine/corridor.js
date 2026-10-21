@@ -10,6 +10,7 @@ import FLOOR from "./floor.js";
 export const ENEMIES = 5;   // enemies at the start; your teammates take 2 of them before they fall
 export const HP = 3;
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
+export const TURN_STEPS = 6; // a 90 degree turn happens in 6 jumps of 15 degrees
 export const DAYS = 3;      // floor.generate's days: 4 wings of 4Dungeon's wing generator (engine/floor.js)
 
 // A small seeded random number generator (mulberry32): the same seed always gives the same numbers.
@@ -107,7 +108,8 @@ export function corridor(seed) {
 }
 
 // Where you are on the rails, s tiles along them: { x, y } on the tile map and the way you face, { dx, dy }. You face
-// along the rails, and at a room where they turn you turn with them, smoothly, over the 3 tiles around its centre.
+// along the rails, and at a room where they turn you turn with them over the 3 tiles around its centre, in TURN_STEPS
+// jumps of 15 degrees (a stutter, like a low frame rate) rather than smoothly.
 export function along(path, s) {
   const n = path.length, k = Math.max(0, Math.min(n - 2, Math.floor(s / S))), t = Math.max(0, Math.min(1, s / S - k));
   const x = path[k].x + (path[k + 1].x - path[k].x) * t, y = path[k].y + (path[k + 1].y - path[k].y) * t;
@@ -115,7 +117,7 @@ export function along(path, s) {
   let a = ang(k);
   for (const j of [k, k + 1]) {   // the turns at either end of this stretch
     if (j < 1 || j > n - 2 || Math.abs(s - j * S) >= 1.5) continue;
-    const u = (s - j * S + 1.5) / 3, e = u * u * (3 - 2 * u);
+    const u = (s - j * S + 1.5) / 3, e = Math.round(u * u * (3 - 2 * u) * TURN_STEPS) / TURN_STEPS;
     let turn = ang(j) - ang(j - 1);
     if (turn > Math.PI) turn -= 2 * Math.PI; if (turn < -Math.PI) turn += 2 * Math.PI;
     a = ang(j - 1) + turn * e;

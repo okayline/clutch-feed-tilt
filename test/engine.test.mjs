@@ -28,11 +28,15 @@ test("a map: the same seed gives the same map; the rails run through open tiles 
   }
 });
 
-test("along the rails: halfway between two rooms you are halfway and face the way the rails go", () => {
+test("along the rails: halfway between two rooms you are halfway and face the way the rails go; turns go in 15 degree jumps", () => {
   const path = [{ x: 3.5, y: 3.5 }, { x: 10.5, y: 3.5 }, { x: 10.5, y: 10.5 }];   // east, then south
   assert.deepEqual(C.along(path, 3.5), { x: 7, y: 3.5, dx: 1, dy: 0 });
   const mid = C.along(path, 7);   // at the turn: halfway round, facing south-east
   assert.ok(Math.abs(mid.dx - Math.SQRT1_2) < 1e-9 && Math.abs(mid.dy - Math.SQRT1_2) < 1e-9);
+  for (let s = 5.5; s <= 8.5; s += 0.1) {   // through the turn you face in jumps of 15 degrees, never in between
+    const r = C.along(path, s), deg = Math.atan2(r.dy, r.dx) * 180 / Math.PI;
+    assert.ok(Math.abs(deg / 15 - Math.round(deg / 15)) < 1e-6, `at ${s.toFixed(1)}: ${deg} degrees`);
+  }
   const after = C.along(path, 10.5);
   assert.ok(Math.abs(after.x - 10.5) < 1e-9 && Math.abs(after.y - 7) < 1e-9 && Math.abs(after.dy - 1) < 1e-9);
 });
