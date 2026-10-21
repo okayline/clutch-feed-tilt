@@ -263,6 +263,8 @@ const view = $("view");
 const colOf = (ev) => { const r = view.getBoundingClientRect(); return (ev.clientX - r.left) / r.width * W; };
 view.addEventListener("pointermove", (ev) => { if (P) P.aim = colOf(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); P.aim = colOf(ev); shoot(P.aim); });
+// a click on a message box closes it (and isn't a shot)
+$("bannerText").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 $("again").addEventListener("click", () => { if (!P) return; build(); $("banner").hidden = true; bannerT = 0; });
 
 $("version").textContent = "v" + VERSION;

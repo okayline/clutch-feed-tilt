@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.2 — "Click Away"
+**Wed Oct 21, 2026 · 7:50 AM HST**
+
+- **Click or tap a message box in the view to close it** (1 v 3, CLUTCH, TILT, FEED). The click closes the box and doesn't count as a shot. Removed: the end-of-run box staying over the view until RUN IT BACK.
+
+---
+
 ## v0.3.1 — "Same Size"
 **Wed Oct 21, 2026 · 7:45 AM HST**
 
