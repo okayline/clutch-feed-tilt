@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.8 — "Shorter"
+**Wed Oct 21, 2026 · 12:47 PM HST**
+
+- The corridor is about a third shorter: it runs through two wings of the floor, ending with the day's own, so 3 to 5 rooms instead of 4 to 7. Removed: the third wing.
+
 ## v0.7 — "Replay"
 **Wed Oct 21, 2026 · 12:22 PM HST**
 

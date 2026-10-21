@@ -12,7 +12,7 @@ export const HP = 3;
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
 export const TURN_STEPS = 6; // a 90 degree turn happens in 6 jumps of 15 degrees
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
-export const RUN_WINGS = 3; // the wings one day's run goes through, ending with the day's own wing
+export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's own wing
 
 // A small seeded random number generator (mulberry32): the same seed always gives the same numbers.
 export function rng(seed) {
@@ -48,7 +48,7 @@ export function level(day) {
 
 // The day's map. 4Dungeon's wing generator (engine/floor.js) builds that quarter's floor from its shared seed, and at
 // every offer of two locked doors the day's seed opens one, so the whole floor is one a 4Dungeon player could walk.
-// The run goes through RUN_WINGS wings ending with the day's own (or the first three, early in the quarter): the
+// The run goes through RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): the
 // rails run from the first room of the first of them to the room behind its last offer (the stairs, on the floor's
 // last wing), the shortest way through open doors, so they turn wherever the wings turn. Only those wings' rooms are
 // drawn. Rooms off the rails (dead ends) stay open to look into. Locked doors that weren't opened stay wall.
