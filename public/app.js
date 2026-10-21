@@ -194,8 +194,8 @@ function frame(message) {
     : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
   const again = P.done && !userOpen() ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
-  const right = again.reduce((n, [t]) => n + t.length, 0) + 12;
-  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
+  const right = again.reduce((n, [t]) => n + t.length, 0) + 22;
+  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, ["[L]EDGER", "btn", "l"], ["  ", ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
   // 4Dungeon's bottom (daily-dungeon screen.js): three log lines, then a row of buttons. The log is the kill feed, newest last.
@@ -244,7 +244,7 @@ function shoot(col, row) {
   P.flash = 0.08;
   const hit = C.fire(P, col, row);
   if (hit) { P.left--; say("YOU got a kill", "b"); }
-  else if (hit === false && P.streak === 3) say("you're tilting...", "g");
+  else if (hit === false && P.streak === 3) say("you're tilted", "g");
 }
 
 function finish() {
@@ -337,11 +337,18 @@ $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("ba
 
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
+// The public ledger page of the shared registry, where every sealed run's checkpoint is. The browser only lets a new tab
+// open from a press it counts as the player's: a mouse's pointerdown, or a finger's pointerup.
+const openLedger = () => window.open("https://88x31.app/registry", "_blank", "noopener");
+const onLedger = (ev) => !!(ev.target.closest && ev.target.closest('[data-k="l"]'));
+$("frame").addEventListener("pointerup", (ev) => { if (ev.pointerType !== "mouse" && onLedger(ev)) openLedger(); });
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
+$("frame").addEventListener("pointerdown", (ev) => { if (ev.pointerType === "mouse" && onLedger(ev)) openLedger(); });
 $("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); else if (s.dataset.k === "r" && P.done) runItBack(); });
 addEventListener("keydown", (ev) => {
   if (userOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-  if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
+  if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); }
+  else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
   else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }
 });
 

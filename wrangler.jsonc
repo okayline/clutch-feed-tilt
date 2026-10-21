@@ -21,7 +21,9 @@
   ],
   // the shared save codes and passkeys (the dungeon-items Worker, `Accounts` entrypoint; see its ACCOUNTS.md)
   "services": [
-    { "binding": "ACCOUNTS", "service": "dungeon-items", "entrypoint": "Accounts" }
+    { "binding": "ACCOUNTS", "service": "dungeon-items", "entrypoint": "Accounts" },
+    // the shared registry's ledger: every sealed run sends it a checkpoint (see checkpoint() in src/worker.js)
+    { "binding": "REGISTRY", "service": "dungeon-items", "entrypoint": "Registry" }
   ],
   "vars": {
     // requests to any *.workers.dev address are sent here instead (passkeys belong to 88x31.app addresses)

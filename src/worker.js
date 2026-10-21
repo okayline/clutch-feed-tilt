@@ -15,7 +15,7 @@
 // The seed is the first 4 bytes of the hash of the day's ledger entry (src/ledger.js dayEntry): everyone gets the same corridor.
 
 import { giveName } from "./names.js";
-import { head, chainInsert, dayEntry, isUnique } from "./ledger.js";
+import { head, chainInsert, dayEntry, isUnique, verifyChain } from "./ledger.js";
 import * as C from "../public/engine/corridor.js";
 
 const COOKIE = "cft";
@@ -179,6 +179,7 @@ async function saveRun(req, env) {
           .bind(player.id, day, label, hp, shots, hits, t),
         await chainInsert(env.DB, await head(env.DB), { day, playerId: player.id, record, t }),
       ]);
+      await checkpoint(env);
       return withCookie(json({ run: await done() }), cookie);
     } catch (e) {
       if (!isUnique(e)) throw e;
@@ -187,6 +188,22 @@ async function saveRun(req, env) {
     }
   }
   throw new Oops("The ledger is busy. Try again in a moment.", 503);
+}
+
+// After a run is sealed, the ledger so far goes to the shared registry (dungeon-items, bound as REGISTRY) as a
+// checkpoint: its entry count and newest hash, which covers every entry before it. The registry is timestamped on
+// Bitcoin, so this ledger is too. Only a chain that checks out is sent. A registry that's away never stops a run: the
+// next run's checkpoint covers it. (Copied from moba-beat's checkpoint.)
+async function checkpoint(env) {
+  try {
+    if (!env.REGISTRY) return;
+    const rows = (await env.DB.prepare("SELECT id, record, prev_hash, hash FROM ledger ORDER BY id").all()).results;
+    if (!rows.length) return;
+    const v = await verifyChain(rows);
+    if (!v.ok) return console.error("The ledger is broken at entry " + v.at + ": no checkpoint sent.");
+    const res = await env.REGISTRY.checkpoint({ game: "clutch-feed-tilt", entries: rows.length, head: rows[rows.length - 1].hash });
+    if (res && res.error) console.error("The registry refused the checkpoint: " + res.error);
+  } catch (e) { console.error(e); }
 }
 
 // Reroll: a new random name nobody has. Only for a player that already exists (looking never makes one).

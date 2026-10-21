@@ -70,7 +70,7 @@ const T0 = Date.parse("2027-01-01T08:00:00Z") / 1000;
 function setup() {
   let t = T0;
   setClock(() => t);
-  const env = { DB: fakeD1(), ACCOUNTS: fakeAccounts() };
+  const env = { DB: fakeD1(), ACCOUNTS: fakeAccounts(), REGISTRY: { sent: [], async checkpoint(c) { this.sent.push(c); return { ok: true, created: true }; } } };
   const jar = {};
   const call = async (who, method, path, body) => {
     const headers = { "content-type": "application/json" };
@@ -173,10 +173,12 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
   const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
   const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: 3, label: C.label(live), log: live.log });
   assert.equal(a.run.hash, sha(dayHash + "|" + rec1), "the first run chains from the day's entry");
+  assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash }], "the registry got a checkpoint: the day and the run, the run's hash as the head");
   assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
   assert.equal((await call("ann", "POST", "/api/run", { day, shots })).status, 409, "one run a day");
 
   // a second player who never shot: the enemies win, 3 HP gone, 0 hits
+  env.REGISTRY.checkpoint = async () => { throw new Error("registry away"); };   // a registry that's away never stops a run
   const b = await call("bo", "POST", "/api/run", { day, shots: [], hp: 3, hits: 3 });
   assert.deepEqual([b.run.hp, b.run.shots, b.run.hits, b.run.label], [0, 0, 0, "FEED"]);
   const boId = env.DB.raw.prepare("SELECT MAX(id) AS id FROM players").get().id;

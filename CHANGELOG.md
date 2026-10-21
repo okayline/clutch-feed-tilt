@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9 — "Ledger"
+**Wed Oct 21, 2026 · 1:00 PM HST**
+
+- Every sealed run now sends a checkpoint to the shared registry, so CLUTCH FEED TILT's ledger is on the registry's public ledger page and under its hourly Bitcoin stamp. If the registry is away, the run is still sealed. Removed: nothing; before, this ledger was only on this game's own server.
+- A [L]EDGER button (or the L key) opens that page in a new tab.
+- The 3-misses message says "you're tilted". Removed: "you're tilting...".
+
 ## v0.8.2 — "Walls"
 **Wed Oct 21, 2026 · 12:55 PM HST**
 
