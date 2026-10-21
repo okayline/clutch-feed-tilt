@@ -22,7 +22,7 @@ function build() {
   // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down.
   const s = squad, t0 = cor.t0;
   P = {
-    y: C.START, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
+    y: C.START, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
     left: C.ENEMIES, phase: "push", done: null, log: [],
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
@@ -74,8 +74,8 @@ function render() {
     // the floor grid
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
       const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
-      const wx = px + rd * rdx, wy = py + rd * rdy, fy = wy - Math.floor(wy), fx = wx - Math.floor(wx);
-      if (fy < 0.07 || fx < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
+      const wx = px + rd * rdx, fx = wx - Math.floor(wx);
+      if (fx < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
   }
   // enemies, far to near
@@ -110,9 +110,10 @@ function render() {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
-  // the gun
-  const gx = Math.round(W / 2 + 10 + (P.flash > 0 ? 1 : 0));
-  ["  __/=", " /###|", "/####|"].forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, H - 3 + i, s[k], "t"); });
+  // the gun: at the bottom, under the crosshair, sliding left and right after it (P.gx eases toward P.aim in step())
+  const GUN = ["      ||      ", "      ||      ", "     /##\\     ", "    /####\\    ", "   /######\\   ", "  /########\\  ", " |##########| "];
+  const gx = Math.round(P.gx) - 7, gy = H - GUN.length + (P.flash > 0 ? 1 : 0);
+  GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 2 ? "g" : "t"); });
 
   let out = "";
   for (let y = 0; y < H; y++) {
@@ -232,7 +233,7 @@ function finish() {
 }
 
 function step(dt) {
-  P.t += dt; P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
+  P.t += dt; P.gx += (P.aim - P.gx) * Math.min(1, dt * 14); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   while (P.script.length && P.script[0][0] <= P.t) P.script.shift()[1]();

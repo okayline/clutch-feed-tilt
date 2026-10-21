@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.7 — "Big Gun"
+**Wed Oct 21, 2026 · 8:00 AM HST**
+
+- The gun is bigger, sits at the bottom and slides left and right after your crosshair. The floor lines that scrolled toward you are gone. Removed: the small fixed gun and the scrolling cross lines.
+
 ## v0.3.6 — "Boxed In"
 **Wed Oct 21, 2026 · 7:55 AM HST**
 
