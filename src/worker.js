@@ -14,7 +14,7 @@
 // The seed is the first 4 bytes of SHA-256("cft:" + day), as an unsigned number: everyone gets the same corridor.
 
 import { giveName } from "./names.js";
-import { head, chainInsert, isUnique } from "./ledger.js";
+import { head, chainInsert, dayEntry, isUnique } from "./ledger.js";
 import * as C from "../public/engine/corridor.js";
 
 const COOKIE = "cft";
@@ -75,8 +75,9 @@ export async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-export async function daySeed(day) {
-  return parseInt((await sha256("cft:" + day)).slice(0, 8), 16);
+// The day's seed: the first 4 bytes of the hash of the day's ledger entry (sealed now if it isn't yet).
+export async function daySeed(env, day) {
+  return parseInt((await dayEntry(env.DB, day, C.level(day), now())).slice(0, 8), 16);
 }
 
 function newToken() {
@@ -141,7 +142,7 @@ const withCookie = (res, cookie) => { for (const c of [cookie].flat()) if (c) re
 async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
-  return json({ day, seed: await daySeed(day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null });
+  return json({ day, seed: await daySeed(env, day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null });
 }
 
 // ---------- runs and the ledger ----------
@@ -163,7 +164,7 @@ const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 async function saveRun(req, env) {
   const b = await body(req), day = utcDay();
   if (b.day !== day) throw new Oops("That day's corridor is over. This run can't be sealed.", 409);
-  const foes = C.corridor(await daySeed(day)).enemies.length;
+  const foes = C.corridor(await daySeed(env, day), day).enemies.length;
   const { hp, shots, hits, log } = b;
   const possible = int(hp, 0, C.HP) && int(shots, 0, MAX_SHOTS) && int(hits, 0, foes) && hits <= shots
     && (hp > 0 ? hits === foes : hits < foes)

@@ -37,7 +37,7 @@ const isOpen = (x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && open[y][x
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
-  cor = C.corridor(SEED);
+  cor = C.corridor(SEED, day);
   open = cor.open;
   enemies = cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0 }));
   squad = cor.squad.map((m) => ({ ...m, k: 0, dead: false }));
@@ -181,7 +181,9 @@ function frame(message) {
   const top = "+" + "=".repeat(FW - 2) + "+";
   const mid = "+" + "=".repeat(VWc) + "+" + "=".repeat(PW) + "+";
   const dash = "+" + "-".repeat(FW - 2) + "+";
-  const head = seg([[" CLUTCH FEED TILT", "b"], ["                 ", ""], [`DAILY CORRIDOR ${day}`, "t"],
+  // the day's 4Dungeon level and wing (corridor.js level), so you can tell which floor today's corridor is
+  const lv = day ? C.level(day) : null;
+  const head = seg([[" CLUTCH FEED TILT", "b"], ["                   ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${lv.wing + 1}` : "", "t"],
                     [day ? `  SEED ${SEED.toString(16).toUpperCase().padStart(8, "0").slice(0, 4)}` : "", "d"]], FW - 2);
   if (message) {
     const L = [top, "|" + head + "|", mid];

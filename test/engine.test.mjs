@@ -4,12 +4,22 @@ import { readFileSync } from "node:fs";
 import * as C from "../public/engine/corridor.js";
 import { VERSION } from "../public/engine/version.js";
 
+test("the 4Dungeon level of a day: the moon quarter at 00:00 UTC, one wing a day", () => {
+  // the mean moon's first quarter fell on Oct 18 2026 and its full on Oct 26 (by the 29.53 day month from
+  // 2000-01-06 18:14 UTC): Oct 21 is the 2nd quarter (B3F), 3 days in; Oct 28 is the 3rd (B2F), 2 days in
+  assert.deepEqual([C.level("2026-10-21").name, C.level("2026-10-21").wing], ["B3F", 3]);
+  assert.deepEqual([C.level("2026-10-28").name, C.level("2026-10-28").wing], ["B2F", 2]);
+  assert.equal(C.level("2026-10-19").seed, C.level("2026-10-24").seed, "one floor for the whole quarter");
+  assert.notEqual(C.level("2026-10-21").seed, C.level("2026-10-28").seed);
+});
+
 test("a map: the same seed gives the same map; the rails run through open tiles from room to room; 3 enemies in notches; 4 teammates", () => {
-  const a = C.corridor(12345), b = C.corridor(12345);
+  const day = "2026-10-21";
+  const a = C.corridor(12345, day), b = C.corridor(12345, day);
   assert.deepEqual(a, b);
-  assert.notDeepEqual(C.corridor(1).path, C.corridor(2).path, "another day, another map");
-  for (const seed of [1, 2, 3, 12345, 3359765128]) {
-    const c = C.corridor(seed);
+  assert.notDeepEqual(C.corridor(1, day).path, C.corridor(2, day).path, "another seed, other doors");
+  for (const [seed, d] of [[1, day], [2, "2026-10-14"], [3, "2026-10-19"], [12345, "2026-10-24"], [3359765128, "2026-10-28"]]) {
+    const c = C.corridor(seed, d);
     assert.ok(c.route.length >= 4, "at least 4 rooms on the rails");
     // every step between rooms is one room (7 tiles) north, east, south or west, through open tiles all the way
     for (let i = 1; i < c.path.length; i++) {

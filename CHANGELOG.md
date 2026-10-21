@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.6 — "B3F"
+**Wed Oct 21, 2026 · 9:20 AM HST**
+
+- Each day's corridor runs through the real 4Dungeon floor of that moon quarter: three of its wings, ending with the day's own. The top of the screen says which, e.g. 4DUNGEON B3F WING 4. Removed: maps of made-up wings.
+- The ledger makes the map. The first visit of each day seals that day on the ledger, and the seal picks which doors open. Nobody can know the day's corridor before the day starts. Removed: a seed worked out from the date alone.
+
 ## v0.5.10 — "Steadier"
 **Wed Oct 21, 2026 · 9:12 AM HST**
 
