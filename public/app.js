@@ -187,11 +187,13 @@ function frame(message) {
 // ---- banner -------------------------------------------------------------------------------------------------
 let bannerT = 0;
 function showBanner(lines, secs) {
-  const w = Math.max(...lines.map(([t, c]) => t.length * (c.includes("big") ? 1.6 : 1))) + 4;
-  const box = "+" + "-".repeat(Math.ceil(w)) + "+";
-  $("bannerText").innerHTML = [`<span class="t">${box}</span>`,
-    ...lines.map(([t, c]) => `<span class="t">|</span>  ${c ? `<span class="${c}">${esc(t)}</span>` : esc(t)}`),
-    `<span class="t">${box}</span>`].join("\n");
+  const inner = Math.max(...lines.map(([t]) => t.length)) + 4;
+  const box = `<span class="t">+${"-".repeat(inner)}+</span>`, bar = `<span class="t">|</span>`;
+  const row = ([t, c]) => {
+    const l = Math.floor((inner - t.length) / 2), body = c ? `<span class="${c}">${esc(t)}</span>` : esc(t);
+    return bar + " ".repeat(l) + body + " ".repeat(inner - t.length - l) + bar;
+  };
+  $("bannerText").innerHTML = [box, ...lines.map(row), box].join("\n");
   $("banner").hidden = false; bannerT = secs;
 }
 

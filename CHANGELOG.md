@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.6 — "Boxed In"
+**Wed Oct 21, 2026 · 7:55 AM HST**
+
+- Message boxes (1 v 3, CLUTCH, TILT, FEED) have a right edge now and their text sits in the middle. Removed: the open right side and the extra-wide box.
+
 ## v0.3.5 — "Log Lines"
 **Wed Oct 21, 2026 · 7:52 AM HST**
 
