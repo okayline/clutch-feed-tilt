@@ -3,6 +3,7 @@ import * as C from "./engine/corridor.js";
 import FLOOR from "./engine/floor.js";
 import { VERSION } from "./engine/version.js";
 import { setupAccount, openPlayer, closePlayer, isOpen as userOpen } from "./account.js";
+import { setupLedger, openLedger, closeLedger, isOpen as ledgerOpen } from "./ledger.js";
 
 const W = C.W, H = C.H;              // the view window at half-size characters: 47 x 17 cells of the frame, doubled
 const FW = 80, PW = 30, VWc = 47;
@@ -188,14 +189,17 @@ function frame(message) {
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
     [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
   ];
+  const over = userOpen() || ledgerOpen();   // a panel covers the 3D view and the run waits
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
+    : ledgerOpen() ? [[" LEDGER: EVERY SEALED DAY AND RUN. THE RUN WAITS.", "t"]]
     : P.done ? [[" RUN OVER. ", "b"], [P.seal || "", "t"]]
     : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
     : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
-  const again = P.done && !userOpen() ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
-  const right = again.reduce((n, [t]) => n + t.length, 0) + 22;
-  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, ["[L]EDGER", "btn", "l"], ["  ", ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
+  const again = P.done && !over ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
+  const buttons = over ? [["[ESC] CLOSE", "btn", "esc"]] : [["[L]EDGER", "btn", "l"], ["  ", ""], ["[U]SER", "btn", "u"]];
+  const right = again.reduce((n, [t]) => n + t.length, 0) + buttons.reduce((n, [t]) => n + t.length, 0) + 1;
+  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, ...buttons, [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
   // 4Dungeon's bottom (daily-dungeon screen.js): three log lines, then a row of buttons. The log is the kill feed, newest last.
@@ -206,22 +210,26 @@ function frame(message) {
 }
 
 // 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms of the rails you've walked
-// through, the ways out of them, and an arrow for the way you face. A door to a room that isn't in today's corridor is
-// wall, as in the 3D view (a locked door still shows #). floor.js draws extra hallways out of room 0 (an
-// irl-dungeon rule), so it is handed the floor with every room number moved up by one. The map is turned so the
-// rails start out going up.
+// through, the ways out of them, and an arrow for the way you face. Drawn by floor.js, 4Dungeon's own minimap code, from
+// the floor as it is (every door a gap, a locked one #), then a + put on every room corner. floor.js draws extra hallways out of room 0 (an irl-dungeon
+// rule), so it is handed the floor with every room number moved up by one.
 function minimap() {
   const k = Math.min(cor.route.length - 1, Math.round(P.s / C.S)), f = cor.floor, up = (j) => j + 1;
-  const [a, b] = cor.path, first = b.y < a.y ? 0 : b.x > a.x ? 1 : b.y > a.y ? 2 : 3;   // N, E, S, W
-  const T = FLOOR.symTransform((4 - first) % 4);
   const view = {
-    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, ...T.pos(r.r, r.c), doors: Object.fromEntries(Object.entries(r.doors).filter(([, j]) => !f.rooms[j] || cor.shown.includes(j)).map(([d, j]) => [T.dir(d), up(j)])) })],
+    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, doors: Object.fromEntries(Object.entries(r.doors).map(([d, j]) => [d, up(j)])) })],
     start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
   };
   const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;
   const { dx, dy } = eye();
   const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N";
-  return FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing: T.dir(facing) });
+  const rows = FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing }).map((r) => r.split(""));
+  // every corner of a room you've been in is a +, even next to a door (floor.js draws those as - or |)
+  const here = f.rooms[cor.route[k]];
+  for (const i of cor.route.slice(0, k + 1)) {
+    const row = 2 + (f.rooms[i].r - here.r) * 2, col = 13 + (f.rooms[i].c - here.c) * 4;
+    for (const y of [row - 1, row + 1]) for (const x of [col - 1, col + 3]) if (rows[y] && x >= 0 && x < rows[y].length) rows[y][x] = "+";
+  }
+  return rows.map((r) => r.join(""));
 }
 
 // ---- banner -------------------------------------------------------------------------------------------------
@@ -322,7 +330,7 @@ function loop(ts) {
   requestAnimationFrame(loop);
   if (last && ts - last < 1000 / C.FPS - 2) return;
   const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0); last = ts;
-  if (!userOpen()) step(dt);
+  if (!userOpen() && !ledgerOpen()) step(dt);
   render(); frame();
 }
 
@@ -337,16 +345,11 @@ $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("ba
 
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
-// The public ledger page of the shared registry, where every sealed run's checkpoint is. The browser only lets a new tab
-// open from a press it counts as the player's: a mouse's pointerdown, or a finger's pointerup.
-const openLedger = () => window.open("https://88x31.app/registry", "_blank", "noopener");
-const onLedger = (ev) => !!(ev.target.closest && ev.target.closest('[data-k="l"]'));
-$("frame").addEventListener("pointerup", (ev) => { if (ev.pointerType !== "mouse" && onLedger(ev)) openLedger(); });
+setupLedger();
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
-$("frame").addEventListener("pointerdown", (ev) => { if (ev.pointerType === "mouse" && onLedger(ev)) openLedger(); });
-$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); else if (s.dataset.k === "r" && P.done) runItBack(); });
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); });
 addEventListener("keydown", (ev) => {
-  if (userOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (userOpen() || ledgerOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
   if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); }
   else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
   else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }

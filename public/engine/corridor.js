@@ -62,7 +62,6 @@ export function level(day) {
 //   squad       4 teammates: 3 ghosts (other players' runs; names stand in until runs are used) and BOT_FEEDER
 //   t0          when the first teammate event happens (seconds)
 //   end         how far along the rails the run ends (the last room's centre)
-//   shown       the room numbers drawn today: the run's wings and the goal
 export function corridor(seed, day) {
   const R = rng(seed), L = level(day);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
@@ -129,7 +128,7 @@ export function corridor(seed, day) {
   const names = [...NAMES];
   const take = () => names.splice(Math.floor(R() * names.length), 1)[0];
   const squad = [take(), take(), take()].map((n) => ({ n, tag: "ghost" })).concat([{ n: "BOT_FEEDER", tag: "bot" }]);
-  return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S, shown: built };
+  return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S };
 }
 
 // sin, cos and atan2 worked out with + - * / and Math.sqrt only, so every browser and the Worker get the same bits

@@ -5,6 +5,7 @@
 //                                      your run today if you've sealed one
 //   POST /api/run {day, shots}         seal today's run on the ledger (one per player per day): the server plays it
 //                                      again from its shots, [[tick, col, row], ...], and seals what it got
+//   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
 //   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
@@ -49,6 +50,7 @@ const ROUTES = {
   "GET /api/today": today,
   "POST /api/name": setName,
   "POST /api/run": saveRun,
+  "GET /api/ledger": ledgerPage,
   "GET /api/account": account,
   "POST /api/codes": codes,
   "POST /api/load": loadCode,
@@ -179,7 +181,7 @@ async function saveRun(req, env) {
           .bind(player.id, day, label, hp, shots, hits, t),
         await chainInsert(env.DB, await head(env.DB), { day, playerId: player.id, record, t }),
       ]);
-      await checkpoint(env);
+      await checkpoint(env, { day, label, hp, hits, shots });
       return withCookie(json({ run: await done() }), cookie);
     } catch (e) {
       if (!isUnique(e)) throw e;
@@ -190,18 +192,27 @@ async function saveRun(req, env) {
   throw new Oops("The ledger is busy. Try again in a moment.", 503);
 }
 
+// The chain, newest first, for the LEDGER panel (public: records hold player ids, never names).
+async function ledgerPage(req, env, url) {
+  const before = Number(url.searchParams.get("before")) || Number.MAX_SAFE_INTEGER;
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 30));
+  const { results } = await env.DB.prepare("SELECT id, kind, day, record, prev_hash, hash, created_at FROM ledger WHERE id < ? ORDER BY id DESC LIMIT ?").bind(before, limit).all();
+  return json({ entries: results });
+}
+
 // After a run is sealed, the ledger so far goes to the shared registry (dungeon-items, bound as REGISTRY) as a
 // checkpoint: its entry count and newest hash, which covers every entry before it. The registry is timestamped on
 // Bitcoin, so this ledger is too. Only a chain that checks out is sent. A registry that's away never stops a run: the
-// next run's checkpoint covers it. (Copied from moba-beat's checkpoint.)
-async function checkpoint(env) {
+// next run's checkpoint covers it. (Copied from moba-beat's checkpoint.) `detail` is the run just sealed: its day, label,
+// HP, hits and shots, which the registry's page tells as a sentence (no player, no shot log).
+async function checkpoint(env, detail) {
   try {
     if (!env.REGISTRY) return;
     const rows = (await env.DB.prepare("SELECT id, record, prev_hash, hash FROM ledger ORDER BY id").all()).results;
     if (!rows.length) return;
     const v = await verifyChain(rows);
     if (!v.ok) return console.error("The ledger is broken at entry " + v.at + ": no checkpoint sent.");
-    const res = await env.REGISTRY.checkpoint({ game: "clutch-feed-tilt", entries: rows.length, head: rows[rows.length - 1].hash });
+    const res = await env.REGISTRY.checkpoint({ game: "clutch-feed-tilt", entries: rows.length, head: rows[rows.length - 1].hash, detail });
     if (res && res.error) console.error("The registry refused the checkpoint: " + res.error);
   } catch (e) { console.error(e); }
 }

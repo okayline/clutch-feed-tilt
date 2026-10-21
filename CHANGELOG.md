@@ -4,6 +4,31 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.5 — "Plus Corners"
+**Wed Oct 21, 2026 · 1:10 PM HST**
+
+- Every corner of a room on the minimap is a +, even next to a door. Removed: the - and | that 4Dungeon's minimap code draws on a corner beside a door.
+
+## v0.9.4 — "Not Turned"
+**Wed Oct 21, 2026 · 1:09 PM HST**
+
+- The minimap is drawn exactly as 4Dungeon would draw this floor, not turned: you see the route spread along the wide side of the map, with its corners. The arrow starts pointing whichever way the route goes. Removed: v0.8.1's turn that made the first stretch point up, which squeezed the route into a short column.
+
+## v0.9.3 — "Told on the Registry"
+**Wed Oct 21, 2026 · 1:08 PM HST**
+
+- The checkpoint each sealed run sends to the registry now carries the run's day, label, HP, hits and shots, so the registry's ledger page tells it as a sentence ("A CLUTCH run. 3 hits from 5 shots, 2 HP left.") in CLUTCH FEED TILT's own frame. No player and no shot log go with it. Removed: the plain "sealed its ledger here" line for this game.
+
+## v0.9.2 — "Same Minimap"
+**Wed Oct 21, 2026 · 1:07 PM HST**
+
+- The minimap is 4Dungeon's, drawn from the floor exactly as it is: every door is a gap and a locked one is #, so the corners and walls come out the way they do in 4Dungeon. Checked against 4Dungeon's own code on 20,400 map positions with no difference. Removed: v0.8.2's change that drew a wall wherever the 3D view has one.
+
+## v0.9.1 — "In-game Ledger"
+**Wed Oct 21, 2026 · 1:04 PM HST**
+
+- [L]EDGER (or the L key) opens this game's own ledger in a panel inside the game, like USER: every sealed day and run, newest first, with its number, what it says (the day's level and wing, or the run's label, hits out of shots and HP) and the start of its hash. [SHOW OLDER] loads more. The run waits while it's open. Removed: the [L]EDGER link that opened the registry's page in a new tab.
+
 ## v0.9 — "Ledger"
 **Wed Oct 21, 2026 · 1:00 PM HST**
 
