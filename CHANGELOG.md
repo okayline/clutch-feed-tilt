@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.8 — "Quiet"
+**Wed Oct 21, 2026 · 9:07 AM HST**
+
+- Nothing under the game now. Removed: the two lines of explanation below the screen.
+
 ## v0.5.7 — "Cool Down"
 **Wed Oct 21, 2026 · 9:05 AM HST**
 
