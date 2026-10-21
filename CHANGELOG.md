@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.2.1 — "Version Tag"
+**Wed Oct 21, 2026 · 7:40 AM HST**
+
+- **The version number sits under the screen, at the right,** like 4Dungeon's. Removed: the version line at the bottom of the page, under the notes.
+
 ## v0.2 — "Log In"
 **Wed Oct 21, 2026 · 7:25 AM HST**
 
