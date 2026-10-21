@@ -101,19 +101,20 @@ test("an enemy takes 3 body shots, or a headshot and a body shot; a headshot alo
   assert.equal(a.state, "dying");
   while (!R.over && !R.enemies.some((e) => e.state === "out")) C.tick(R);   // on to the next enemy
   const b = R.enemies.find((e) => e.state === "out"), bb = C.enemyBox(C.eyeOf(R), b), bl = Math.round(bb.bot - 1), bm = Math.round(bb.sxc);
+  assert.deepEqual([C.onHead(bb, bm, bb.top), C.onHead(bb, bm, bb.top - 1)], [true, false], "the head is the drawn @ only, no spare row above");
   assert.deepEqual([C.fire(R, bm, bb.top), C.fire(R, bm, bl)], ["head", "kill"], "a headshot (2) leaves it up; a body shot (1) then drops it");
   assert.equal(b.state, "dying");
   assert.deepEqual([R.hits, R.kills, R.heads], [5, 2, 1]);
 });
 
-test("tilt: a miss adds 0.5 with no enemy on the view; with one on it, 1.5 and at least half the bar (2.5)", () => {
+test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
   const R = C.newRun(C.corridor(12345, "2026-10-21"));
-  assert.equal(C.fire(R, 40, 10), false); assert.equal(R.streak, 0.5);
+  assert.equal(C.fire(R, 40, 10), false); assert.equal(R.streak, 0.25);
   while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
   const b = C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out"));
   assert.ok(b.rr >= 0 && b.l < C.W, "the enemy is on the view");
-  assert.equal(C.fire(R, b.l > 10 ? 0 : 93, 1), false); assert.equal(R.streak, 2.5);
-  C.fire(R, b.l > 10 ? 0 : 93, 1); assert.equal(R.streak, 4);
+  assert.equal(C.fire(R, b.l > 10 ? 0 : 93, 1), "miss"); assert.equal(R.streak, 3);
+  C.fire(R, b.l > 10 ? 0 : 93, 1); assert.equal(R.streak, 4.5);
 });
 
 test("replay: no shots and you die with 0 hits; shots that aren't a run are refused", () => {

@@ -202,7 +202,7 @@ const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ti
 const FIRE_TICKS = 25;                // then fires every 25 ticks
 const DIE_TICKS = 8;
 export const ENEMY_HP = 3, HEAD_DMG = 2;   // body shots to drop an enemy; a headshot counts 2, so chest then head (a double tap) drops it
-export const TILT_SEEN = 1.5, TILT_BLIND = 0.5, TILT_HALF = 2.5;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; half the bar
+export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
 export const MAX_TICKS = 9000;        // ten minutes: no run is longer
 export const MAX_SHOTS = 2000;
@@ -283,11 +283,12 @@ export function tick(R) {
   return ev;
 }
 
-// Is (col, row) on an enemy's head? Its top HEAD of rows (and the row above, as for the body), its middle columns.
-export const onHead = (b, c, r) => r >= b.top - 1 && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
+// Is (col, row) on an enemy's head? Exactly the @ the page draws: its top HEAD of rows, its middle columns (no spare row
+// above, as the body has), so far away, where the head is a row or two, a headshot is hard.
+export const onHead = (b, c, r) => r >= b.top && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
 
 // A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns false for a
-// miss, "body" or "head" for a hit that leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a
+// shot at nothing, "miss" for a miss with an enemy on the view, "body" or "head" for a hit that leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a
 // headshot that drops it, or null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
 export function fire(R, col, row) {
   if (R.over) return null;
@@ -300,7 +301,8 @@ export function fire(R, col, row) {
   const hit = up
     .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
     .sort((a, b) => a.b.ry - b.b.ry)[0];
-  let got = false;
+  const seen = up.some(({ b }) => b && b.rr >= 0 && b.l < W);
+  let got = seen ? "miss" : false;
   if (hit) {
     const head = onHead(hit.b, c, r);
     hit.e.hp -= head ? HEAD_DMG : 1; R.hits++;
@@ -312,7 +314,7 @@ export function fire(R, col, row) {
   } else {
     // a miss with an enemy on the view tilts you more than a shot at nothing
     // and always leaves the bar at least half full (TILT_HALF of 5)
-    R.streak = up.some(({ b }) => b && b.rr >= 0 && b.l < W) ? Math.max(TILT_HALF, R.streak + TILT_SEEN) : R.streak + TILT_BLIND; R.calm = 0;
+    R.streak = seen ? Math.max(TILT_HALF, R.streak + TILT_SEEN) : R.streak + TILT_BLIND; R.calm = 0;
   }
   R.log.push([R.tick, col, row, hit ? 1 : 0]);
   return got;
