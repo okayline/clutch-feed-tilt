@@ -11,7 +11,7 @@
 //   POST /api/passkey {action ...}     register_options / register / login_options / login / remove
 //   POST /api/logout                   this browser forgets its player (needs a save code or passkey first)
 //
-// The seed is the first 4 bytes of SHA-256("cft:" + day), as an unsigned number: everyone gets the same corridor.
+// The seed is the first 4 bytes of the hash of the day's ledger entry (src/ledger.js dayEntry): everyone gets the same corridor.
 
 import { giveName } from "./names.js";
 import { head, chainInsert, dayEntry, isUnique } from "./ledger.js";
