@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.2 — "Same Minimap"
+**Wed Oct 21, 2026 · 1:07 PM HST**
+
+- The minimap is 4Dungeon's, drawn from the floor exactly as it is: every door is a gap and a locked one is #, so the corners and walls come out the way they do in 4Dungeon. Checked against 4Dungeon's own code on 20,400 map positions with no difference. Removed: v0.8.2's change that drew a wall wherever the 3D view has one.
+
 ## v0.9.1 — "In-game Ledger"
 **Wed Oct 21, 2026 · 1:04 PM HST**
 
