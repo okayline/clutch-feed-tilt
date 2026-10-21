@@ -267,8 +267,9 @@ function loop(ts) {
 
 const view = $("view");
 // where the pointer is, in the view's half-size character cells
-const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = (ev.clientX - r.left) / r.width * W; P.aimY = Math.max(1, Math.min(H - 2, (ev.clientY - r.top) / r.height * H)); };
-view.addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
+const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(H - 2, (ev.clientY - r.top) / r.height * H)); };
+// on the whole game, not just the view: a message box sits over the view and would swallow the pointer moving across it
+$("game").addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
 // a click on a message box closes it (and isn't a shot)
 $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });

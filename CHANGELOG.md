@@ -7,7 +7,7 @@ Newest first. Times are Hawaii time (HST).
 ## v0.3.5 — "Log Lines"
 **Wed Oct 21, 2026 · 7:52 AM HST**
 
-- The bottom of the screen is laid out like 4Dungeon's, with three log lines. You can tap anywhere on a message to close it, and the crosshair stops going wild. Removed: the kill feed panel.
+- The bottom of the screen is laid out like 4Dungeon's, with three log lines. You can tap anywhere on a message to close it, and the crosshair stops going wild and now moves under a message box too. Removed: the kill feed panel.
 
 ## v0.3.4 — "Aim Up"
 **Wed Oct 21, 2026 · 7:45 AM HST**
