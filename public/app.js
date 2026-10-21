@@ -1,6 +1,7 @@
 // The page: draws the frame and the view, runs the fight, and names the run. The rules are in engine/corridor.js.
 import * as C from "./engine/corridor.js";
 import { VERSION } from "./engine/version.js";
+import { setupAccount } from "./account.js";
 
 const W = 94, H = 34;                // the view window at half-size characters: 47 x 17 cells of the frame, doubled
 const FW = 80, PW = 30, VWc = 47;
@@ -8,7 +9,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-let day = "", SEED = 0;
+let day = "", SEED = 0, myName = null;
 let open, enemies, squad, feed, P;
 const isOpen = (x, y) => x >= 0 && y >= 0 && x < C.MW && y < C.ML && open[y][x];
 
@@ -152,7 +153,7 @@ function frame(message) {
   const rows = [
     [[" SQUAD", ""], ["            HP    K", "t"]],
     [[rule, "d"]],
-    [[" YOU", "b"], ["            ", ""], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.hits), "b"]],
+    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.hits), "b"]],
     ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
                          [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
     [[rule, "d"]],
@@ -264,11 +265,12 @@ addEventListener("resize", fit);
 (document.fonts ? document.fonts.ready : Promise.resolve()).then(fit);
 fit();
 $("version").textContent = "v" + VERSION;
+setupAccount((name) => { myName = name; });
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
-  day = t.day; SEED = t.seed;
+  day = t.day; SEED = t.seed; myName = t.name;
   build();
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));

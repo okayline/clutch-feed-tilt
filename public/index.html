@@ -54,6 +54,20 @@
   button:hover { color: var(--bright); border-color: var(--bright); }
   button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   .note { color: var(--trail); font-size: 20px; max-width: 62ch; text-align: center; line-height: 1.15; margin: 0; }
+  .account {
+    width: min(100%, 62ch); box-sizing: border-box; border: 1px solid var(--trail); padding: 10px 14px;
+    font-size: 20px; line-height: 1.15; display: flex; flex-direction: column; gap: 8px;
+    -webkit-user-select: text; user-select: text;
+  }
+  .account[hidden] { display: none; }
+  .account p { margin: 0; }
+  .account .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .account .code { font-size: 1.6em; letter-spacing: .08em; word-break: break-all; }
+  .account input {
+    font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--trail); padding: 4px 8px;
+    min-width: 0; flex: 1 1 12ch;
+  }
+  .account button.small { font-size: 18px; padding: 2px 8px; }
   #measure { position: absolute; visibility: hidden; white-space: pre; font: 20px var(--mono); }
 </style>
 </head>
@@ -65,7 +79,9 @@
 </div>
 <div class="controls">
   <button id="again" type="button">RUN IT BACK</button>
+  <button id="accountBtn" type="button">ACCOUNT</button>
 </div>
+<section class="account" id="account" hidden></section>
 <p class="note">Today's corridor is the same for everyone. Tap or click the enemies.<br>Runs aren't saved yet, so you can run it back as often as you like.</p>
 <p class="note" id="version"></p>
 <span id="measure">0000000000</span>

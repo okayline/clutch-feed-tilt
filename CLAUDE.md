@@ -4,6 +4,8 @@ CLUTCH FEED TILT: a daily ASCII corridor shooter. One corridor per UTC day, the 
 
 - **Push only when the user says to.** Once the Worker is connected to this repo, a push to `main` is a release.
 - **The rules live in one file**, `public/engine/corridor.js`, loaded by the page and the tests. Change a rule there, once.
+- **Database changes** need a file in `migrations/`, `schema.sql` updated to match, and the live `cft-db` migrated before the push that needs it.
+- **Save codes and passkeys are the shared Accounts service** (dungeon-items `ACCOUNTS.md`, bound here as `ACCOUNTS`, game name `clutch-feed-tilt`). This game keeps only its own players, sessions and cookie (`cft`). The account code in `src/worker.js` and `public/account.js` is copied from aura-farm.
 - **The day's seed comes from the Worker** (`/api/today`, `src/worker.js`), from the server's clock.
 - The frame, font and colours are copied from 4Dungeon (`daily-dungeon/index.html`, `screen.js`); `public/fonts/VT323-Regular.ttf` is OFL (see `OFL.txt`).
 - **Keep testing quick**: `npm test` must pass before any commit, plus one quick check of whatever changed. Expected values come from hand-worked examples or node:crypto, not the code under test.

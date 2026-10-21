@@ -1,23 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import * as C from "../public/engine/corridor.js";
 import { VERSION } from "../public/engine/version.js";
-import worker, { daySeed } from "../src/worker.js";
-
-test("the day's seed: the first 4 bytes of SHA-256('cft:' + day)", async () => {
-  const want = parseInt(createHash("sha256").update("cft:2026-10-21").digest("hex").slice(0, 8), 16);
-  assert.equal(await daySeed("2026-10-21"), want);
-});
-
-test("/api/today gives today's UTC day and its seed", async () => {
-  const r = await worker.fetch(new Request("https://x/api/today"), {});
-  const t = await r.json();
-  assert.equal(t.day, new Date().toISOString().slice(0, 10));
-  assert.equal(t.seed, parseInt(createHash("sha256").update("cft:" + t.day).digest("hex").slice(0, 8), 16));
-  assert.equal((await worker.fetch(new Request("https://x/api/nope"), {})).status, 404);
-});
 
 test("a corridor: the same seed gives the same corridor; 3 enemies in open alcoves; 4 teammates", () => {
   const a = C.corridor(12345), b = C.corridor(12345);

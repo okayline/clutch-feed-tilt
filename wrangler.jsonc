@@ -1,5 +1,5 @@
 {
-  // The Worker's name must match the one in the Cloudflare dashboard.
+  // CLUTCH FEED TILT. The Worker's name must match the one in the Cloudflare dashboard.
   "name": "clutch-feed-tilt",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
@@ -8,6 +8,23 @@
     "directory": "public",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
+  },
+  "routes": [
+    { "pattern": "cft.88x31.app", "custom_domain": true }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "cft-db",
+      "database_id": "c901f5df-a8cc-4ce2-afd9-774282c20d52"
+    }
+  ],
+  // the shared save codes and passkeys (the dungeon-items Worker, `Accounts` entrypoint; see its ACCOUNTS.md)
+  "services": [
+    { "binding": "ACCOUNTS", "service": "dungeon-items", "entrypoint": "Accounts" }
+  ],
+  "vars": {
+    // requests to any *.workers.dev address are sent here instead (passkeys belong to 88x31.app addresses)
+    "CANONICAL_HOST": "cft.88x31.app"
   }
-  // No custom domain yet: it runs on its workers.dev address until one is picked.
 }
