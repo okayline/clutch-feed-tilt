@@ -255,9 +255,7 @@ function showBanner(lines, secs) {
 function shoot(col, row) {
   if (P.done) return;
   P.flash = 0.08;
-  // nothing to shoot at yet: the gun fires, but it isn't a shot taken (no miss, no tilt)
-  if (!enemies.some((e) => e.state === "out" || e.state === "stepping")) return;
-  P.shots++;
+  P.shots++;   // every shot counts, with or without anything to shoot at: firing at nothing is a miss
   const c = Math.round(col + P.jit), r = Math.round(row);
   const hit = enemies.filter((e) => e.state === "out" || e.state === "stepping")
     .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && r >= e.sy[0] - 1 && r <= e.sy[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)

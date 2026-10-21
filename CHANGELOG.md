@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.5 — "Every Shot"
+**Wed Oct 21, 2026 · 9:03 AM HST**
+
+- Every shot counts, even while you're walking with nothing to shoot at. It's a miss, it lowers your accuracy and it shakes your crosshair, so firing at random can make your run a TILT. Removed: free shots before the enemies step out.
+
 ## v0.5.4 — "Pan"
 **Wed Oct 21, 2026 · 9:02 AM HST**
 

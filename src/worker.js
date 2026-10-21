@@ -153,7 +153,7 @@ async function runOf(env, playerId, day) {
      WHERE r.player_id = ? AND r.day = ?`).bind(playerId, day).first();
 }
 
-const MAX_SHOTS = 500;
+const MAX_SHOTS = 2000;   // every click is a shot, walking or not
 const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
 
 // Seal today's run. The run is played in the browser and the server can't replay it, so it only checks the run is
