@@ -4,6 +4,22 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.6 — "B3F"
+**Wed Oct 21, 2026 · 9:20 AM HST**
+
+- Each day's corridor runs through the real 4Dungeon floor of that moon quarter: three of its wings, ending with the day's own. The top of the screen says which, e.g. 4DUNGEON B3F WING 4. Removed: maps of made-up wings.
+- The ledger makes the map. The first visit of each day seals that day on the ledger, and the seal picks which doors open. Nobody can know the day's corridor before the day starts. Removed: a seed worked out from the date alone.
+
+## v0.5.10 — "Steadier"
+**Wed Oct 21, 2026 · 9:12 AM HST**
+
+- The crosshair shakes half as far while you're tilting. Removed: the wider shake.
+
+## v0.5.9 — "Run It Back"
+**Wed Oct 21, 2026 · 9:12 AM HST**
+
+- Once your run is over, [R]UN IT BACK (or the R key) plays today's corridor again as practice. Practice runs aren't sealed, and your sealed run stays as it was. Removed: nothing.
+
 ## v0.5.8 — "Quiet"
 **Wed Oct 21, 2026 · 9:07 AM HST**
 

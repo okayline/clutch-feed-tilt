@@ -37,7 +37,7 @@ const isOpen = (x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && open[y][x
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
-  cor = C.corridor(SEED);
+  cor = C.corridor(SEED, day);
   open = cor.open;
   enemies = cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0 }));
   squad = cor.squad.map((m) => ({ ...m, k: 0, dead: false }));
@@ -181,7 +181,9 @@ function frame(message) {
   const top = "+" + "=".repeat(FW - 2) + "+";
   const mid = "+" + "=".repeat(VWc) + "+" + "=".repeat(PW) + "+";
   const dash = "+" + "-".repeat(FW - 2) + "+";
-  const head = seg([[" CLUTCH FEED TILT", "b"], ["                 ", ""], [`DAILY CORRIDOR ${day}`, "t"],
+  // the day's 4Dungeon level and wing (corridor.js level), so you can tell which floor today's corridor is
+  const lv = day ? C.level(day) : null;
+  const head = seg([[" CLUTCH FEED TILT", "b"], ["                   ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${lv.wing + 1}` : "", "t"],
                     [day ? `  SEED ${SEED.toString(16).toUpperCase().padStart(8, "0").slice(0, 4)}` : "", "d"]], FW - 2);
   if (message) {
     const L = [top, "|" + head + "|", mid];
@@ -213,7 +215,9 @@ function frame(message) {
     : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
     : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
-  status.push([" ".repeat(Math.max(1, FW - 2 - used - 12)), ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
+  const again = P.done && !userOpen() ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
+  const right = again.reduce((n, [t]) => n + t.length, 0) + 12;
+  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
   // 4Dungeon's bottom (daily-dungeon screen.js): three log lines, then a row of buttons. The log is the kill feed, newest last.
@@ -276,7 +280,14 @@ function shoot(col, row) {
 function finish() {
   P.done = C.label(P);
   endBanner(P.done);
-  seal();
+  if (P.practice) P.seal = "PRACTICE, NOT SEALED."; else seal();
+}
+
+// After the run is over: play today's corridor again, as practice. It's never sent, so today's sealed run stays.
+function runItBack() {
+  build(); P.practice = true;
+  $("banner").hidden = true; bannerT = 0;
+  say("Practice run: it isn't sealed. Your sealed run stays as it was.", "t");
 }
 
 function endBanner(kind) {
@@ -318,7 +329,7 @@ function step(dt) {
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   while (P.script.length && P.script[0][0] <= P.t) P.script.shift()[1]();
-  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.7 : 0;
+  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.35 : 0;
   if (P.done) return;
 
   const active = enemies.filter((e) => e.state === "stepping" || e.state === "out");
@@ -369,8 +380,12 @@ $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("ba
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
-$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); });
-addEventListener("keydown", (ev) => { if (!userOpen() && P && (ev.key === "u" || ev.key === "U") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); openPlayer(); } });
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); else if (s.dataset.k === "r" && P.done) runItBack(); });
+addEventListener("keydown", (ev) => {
+  if (userOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
+  else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }
+});
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");

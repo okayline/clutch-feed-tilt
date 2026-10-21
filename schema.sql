@@ -43,10 +43,11 @@ CREATE TABLE IF NOT EXISTS runs (
   UNIQUE (player_id, day)
 );
 
--- One SHA-256 hash chain, one entry per run (src/ledger.js). Records hold player ids, never names.
+-- One SHA-256 hash chain: one entry per UTC day (its hash is the day's seed) and one per run (src/ledger.js).
+-- Records hold player ids, never names.
 CREATE TABLE IF NOT EXISTS ledger (
   id          INTEGER PRIMARY KEY,
-  kind        TEXT NOT NULL,          -- run
+  kind        TEXT NOT NULL,          -- day | run
   day         TEXT NOT NULL,
   run_id      INTEGER,
   record      TEXT NOT NULL,          -- the sealed JSON record
@@ -55,3 +56,4 @@ CREATE TABLE IF NOT EXISTS ledger (
   created_at  INTEGER NOT NULL
 );
 CREATE UNIQUE INDEX IF NOT EXISTS ledger_one_run ON ledger (run_id) WHERE kind = 'run';
+CREATE UNIQUE INDEX IF NOT EXISTS ledger_one_day ON ledger (day) WHERE kind = 'day';
