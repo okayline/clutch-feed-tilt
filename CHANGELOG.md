@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.4.2 — "Glock"
+**Wed Oct 21, 2026 · 8:33 AM HST**
+
+- A new gun drawn from a real pistol (a Glock 17 from behind: sights, slide, frame, grip) with straight sides. It moves as one stiff piece. Removed: the old flared gun and the way it bent as it swung.
+
 ## v0.4.1 — "Swing"
 **Wed Oct 21, 2026 · 8:24 AM HST**
 

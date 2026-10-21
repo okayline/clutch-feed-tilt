@@ -9,9 +9,10 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// the gun, at the bottom middle of the view (drawn in render())
-const GUN_SWING = 8;    // the most the gun's muzzle leans left or right, in cells
-const GUN = ["      ||      ", "      ||      ", "     /##\\     ", "    /####\\    ", "   /######\\   ", "  /########\\  ", " |##########| "];
+// the gun, at the bottom middle of the view (drawn in render()): a Glock 17 seen from behind, as you'd hold it. The
+// front sight post sits in the rear sight's notch; under them the slide, the frame and the top of the grip.
+const GUN_SWING = 8;    // the most the gun moves left or right, in cells
+const GUN = ["     _||_     ", "   _|    |_   ", "  |========|  ", "  |########|  ", "  |########|  ", "  |___##___|  ", "     |##|     "];
 
 let day = "", SEED = 0, myName = null;
 let open, enemies, squad, feed, P;
@@ -114,15 +115,11 @@ function render() {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
-  // the gun: its grip fixed at the bottom middle, swinging in an arc toward the crosshair. P.gx (eased toward the pointer in
-  // step()) sets the lean: the higher a row, the further it leans; the gun dips as it swings out; the barrel tilts.
+  // the gun: one rigid piece at the bottom middle, moving after the crosshair along a small arc (it dips as it goes
+  // out to the side). P.gx eases toward the pointer in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, (P.gx - W / 2) * 0.2));
-  const gy = H - GUN.length + Math.round(lean * lean / 32) + (P.flash > 0 ? 1 : 0), top = GUN.length - 1;
-  const tilt = lean > 2 ? "/" : lean < -2 ? "\\" : "|";
-  GUN.forEach((s, i) => {
-    const gx = W / 2 - 7 + Math.round(lean * (top - i) / top);
-    for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k] === "|" && i < 2 ? tilt : s[k], P.flash > 0 && i < 2 ? "g" : "t");
-  });
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + Math.round(lean * lean / 32) + (P.flash > 0 ? 1 : 0);
+  GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 2 ? "g" : "t"); });
 
   let out = "";
   for (let y = 0; y < H; y++) {
