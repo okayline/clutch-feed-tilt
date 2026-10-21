@@ -1,7 +1,9 @@
 // CLUTCH FEED TILT Worker. The page and its files are static assets; /api/* comes here first.
 //
-//   GET  /api/today                    { day, seed, name }: today's date in UTC (from the server's clock, so a wrong
-//                                      phone clock can't pick another day), its seed, and your name if you have a player
+//   GET  /api/today                    { day, seed, name, run }: today's date in UTC (from the server's clock, so a wrong
+//                                      phone clock can't pick another day), its seed, your name if you have a player, and
+//                                      your run today if you've sealed one
+//   POST /api/run {day, hp, shots, hits, log}   seal today's run on the ledger (one per player per day)
 //   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
@@ -12,6 +14,8 @@
 // The seed is the first 4 bytes of SHA-256("cft:" + day), as an unsigned number: everyone gets the same corridor.
 
 import { giveName } from "./names.js";
+import { head, chainInsert, isUnique } from "./ledger.js";
+import * as C from "../public/engine/corridor.js";
 
 const COOKIE = "cft";
 const COOKIE_MAX_AGE = 400 * 86400;
@@ -43,6 +47,7 @@ class Oops extends Error {
 const ROUTES = {
   "GET /api/today": today,
   "POST /api/name": setName,
+  "POST /api/run": saveRun,
   "GET /api/account": account,
   "POST /api/codes": codes,
   "POST /api/load": loadCode,
@@ -136,7 +141,58 @@ const withCookie = (res, cookie) => { for (const c of [cookie].flat()) if (c) re
 async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
-  return json({ day, seed: await daySeed(day), name: player ? player.name : null });
+  return json({ day, seed: await daySeed(day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null });
+}
+
+// ---------- runs and the ledger ----------
+
+// This player's sealed run on that day, with its ledger entry, or null.
+async function runOf(env, playerId, day) {
+  return env.DB.prepare(
+    `SELECT r.label, r.hp, r.shots, r.hits, l.id AS entry, l.hash FROM runs r JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id
+     WHERE r.player_id = ? AND r.day = ?`).bind(playerId, day).first();
+}
+
+const MAX_SHOTS = 500;
+const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+
+// Seal today's run. The run is played in the browser and the server can't replay it, so it only checks the run is
+// possible: today's corridor, HP 0 to 3, one hit per enemy you face (all of them if you're alive, fewer if you died),
+// and a shot log with one [seconds, column, row, hit] per shot that adds up to the hits. The label is worked out here.
+// The run and its ledger entry are one D1 batch.
+async function saveRun(req, env) {
+  const b = await body(req), day = utcDay();
+  if (b.day !== day) throw new Oops("That day's corridor is over. This run can't be sealed.", 409);
+  const foes = C.corridor(await daySeed(day)).enemies.length;
+  const { hp, shots, hits, log } = b;
+  const possible = int(hp, 0, C.HP) && int(shots, 0, MAX_SHOTS) && int(hits, 0, foes) && hits <= shots
+    && (hp > 0 ? hits === foes : hits < foes)
+    && Array.isArray(log) && log.length === shots
+    && log.every((s, i) => Array.isArray(s) && s.length === 4 && s.slice(0, 3).every(Number.isFinite) && (s[3] === 0 || s[3] === 1)
+                           && s[0] >= 0 && (i === 0 || s[0] >= log[i - 1][0]))
+    && log.filter((s) => s[3] === 1).length === hits;
+  if (!possible) throw new Oops("That run doesn't add up. It wasn't sealed.");
+  const { player, cookie } = await needPlayer(req, env);
+  const label = C.label({ hp, shots, hits });
+  const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, log });
+  const done = () => runOf(env, player.id, day);
+  if (await done()) throw new Oops("You've already sealed a run today. A new corridor opens at midnight UTC.", 409);
+  for (let i = 0; i < 3; i++) {
+    const t = now();
+    try {
+      await env.DB.batch([
+        env.DB.prepare("INSERT INTO runs (player_id, day, label, hp, shots, hits, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+          .bind(player.id, day, label, hp, shots, hits, t),
+        await chainInsert(env.DB, await head(env.DB), { day, playerId: player.id, record, t }),
+      ]);
+      return withCookie(json({ run: await done() }), cookie);
+    } catch (e) {
+      if (!isUnique(e)) throw e;
+      if (await done()) throw new Oops("You've already sealed a run today. A new corridor opens at midnight UTC.", 409);
+      // someone else sealed at the same moment (the head moved): chain from the new head
+    }
+  }
+  throw new Oops("The ledger is busy. Try again in a moment.", 503);
 }
 
 // Reroll: a new random name nobody has. Only for a player that already exists (looking never makes one).
