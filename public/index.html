@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CLUTCH FEED TILT</title>
+<style>
+  /* One terminal screen: 4Dungeon's 80-column text frame, with a hi-res ASCII raycast window where the 3D view sits. */
+  @font-face { font-family: "VT323"; src: url("fonts/VT323-Regular.ttf") format("truetype"); font-display: swap; }
+  :root {
+    --bg: #07090a;
+    --fg: #e4e4df;
+    --dim: #4f5d52;
+    --trail: #8f8f8a;
+    --bright: #ffffff;
+    --enemy: #e0564a;
+    --gold: #e3b341;
+    --ghost: #9fc4ff;
+    --mono: "VT323", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    margin: 0; min-height: 100vh; box-sizing: border-box;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 20px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px));
+    font-family: var(--mono); font-variant-ligatures: none;
+    -webkit-user-select: none; user-select: none;
+  }
+  .game { position: relative; font-size: 18px; line-height: 1; max-width: 100%; }
+  .game pre { margin: 0; font: inherit; line-height: 1; white-space: pre; }
+  .view {
+    position: absolute; left: 1ch; top: 3em; width: 47ch; height: 17em;
+    background: var(--bg); overflow: hidden; cursor: crosshair; touch-action: manipulation;
+  }
+  .view pre { font-size: .5em; }
+  .view.hurt { box-shadow: inset 0 0 0 .25em var(--enemy); }
+  .game.shake { animation: shake .18s linear; }
+  @keyframes shake { 25% { transform: translate(3px, -2px) } 50% { transform: translate(-3px, 2px) } 75% { transform: translate(2px, 1px) } }
+  @media (prefers-reduced-motion: reduce) { .game.shake { animation: none; } }
+  .banner {
+    position: absolute; left: 1ch; top: 3em; width: 47ch; height: 17em;
+    display: flex; align-items: center; justify-content: center; pointer-events: none;
+  }
+  .banner pre { background: var(--bg); padding: .3em 0; text-align: left; }
+  .d { color: var(--dim); } .t { color: var(--trail); } .b { color: var(--bright); text-shadow: 0 0 6px var(--bright); }
+  .e { color: var(--enemy); } .g { color: var(--gold); text-shadow: 0 0 6px var(--gold); } .h { color: var(--ghost); }
+  .big { font-size: 1.6em; letter-spacing: .25em; }
+  .controls { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  button {
+    font: inherit; font-size: 22px; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--trail); padding: 4px 14px; cursor: pointer;
+  }
+  button:hover { color: var(--bright); border-color: var(--bright); }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .note { color: var(--trail); font-size: 20px; max-width: 62ch; text-align: center; line-height: 1.15; margin: 0; }
+  #measure { position: absolute; visibility: hidden; white-space: pre; font: 20px var(--mono); }
+</style>
+</head>
+<body>
+<div class="game" id="game">
+  <pre id="frame"></pre>
+  <div class="view" id="view" aria-label="Tap or click to shoot"><pre id="screen"></pre></div>
+  <div class="banner" id="banner" hidden><pre id="bannerText"></pre></div>
+</div>
+<div class="controls">
+  <button id="again" type="button">RUN IT BACK</button>
+</div>
+<p class="note">Today's corridor is the same for everyone. Tap or click the enemies.<br>Runs aren't saved yet, so you can run it back as often as you like.</p>
+<p class="note" id="version"></p>
+<span id="measure">0000000000</span>
+<script type="module" src="app.js"></script>
+</body>
+</html>

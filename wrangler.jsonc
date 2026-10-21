@@ -1,0 +1,13 @@
+{
+  // The Worker's name must match the one in the Cloudflare dashboard.
+  "name": "clutch-feed-tilt",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  // The site's files (index.html etc). /api/* goes to the Worker code first.
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  }
+  // No custom domain yet: it runs on its workers.dev address until one is picked.
+}
