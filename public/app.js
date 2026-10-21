@@ -35,7 +35,7 @@ function build() {
   };
   feed = [];
 }
-function say(t, c) { feed.push([t.slice(0, 27), c]); if (feed.length > 5) feed.shift(); }
+function say(t, c) { feed.push([t.slice(0, 77), c]); if (feed.length > 3) feed.shift(); }
 
 function clutchMoment() {
   P.phase = "clutch";
@@ -142,12 +142,13 @@ function seg(parts, n) {   // [[text, cls], ...] padded to n visible columns
 function frame(message) {
   const top = "+" + "=".repeat(FW - 2) + "+";
   const mid = "+" + "=".repeat(VWc) + "+" + "=".repeat(PW) + "+";
+  const dash = "+" + "-".repeat(FW - 2) + "+";
   const head = seg([[" CLUTCH FEED TILT", "b"], ["                 ", ""], [`DAILY CORRIDOR ${day}`, "t"],
                     [day ? `  SEED ${SEED.toString(16).toUpperCase().padStart(8, "0").slice(0, 4)}` : "", "d"]], FW - 2);
   if (message) {
     const L = [top, "|" + head + "|", mid];
     for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + " ".repeat(PW) + "|");
-    L.push(mid, "|" + seg([[" " + message, "t"]], FW - 2) + "|", top);
+    L.push(top, ...[" " + message, "", ""].map((t) => "|" + seg([[t, "t"]], FW - 2) + "|"), dash, "|" + " ".repeat(FW - 2) + "|", top);
     setFrame(L.join("\n"));
     return;
   }
@@ -163,8 +164,7 @@ function frame(message) {
     ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
                          [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
     [[rule, "d"]],
-    [[" KILL FEED", "t"]],
-    ...Array.from({ length: 5 }, (_, i) => feed[i] ? [[" " + feed[i][0], feed[i][1]]] : [[""]]),
+    ...Array.from({ length: 6 }, () => [[""]]),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
     [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
@@ -177,7 +177,10 @@ function frame(message) {
   status.push([" ".repeat(Math.max(1, FW - 2 - used - 12)), ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
-  L.push(mid, "|" + seg(status, FW - 2) + "|", top);
+  // 4Dungeon's bottom (daily-dungeon screen.js): three log lines, then a row of buttons. The log is the kill feed, newest last.
+  const log = feed.slice(-3);
+  while (log.length < 3) log.unshift(["", ""]);
+  L.push(top, ...log.map(([t, c]) => "|" + seg([[" " + t, c]], FW - 2) + "|"), dash, "|" + seg(status, FW - 2) + "|", top);
   setFrame(L.join("\n"));
 }
 
@@ -195,7 +198,10 @@ function showBanner(lines, secs) {
 // ---- play ---------------------------------------------------------------------------------------------------
 function shoot(col, row) {
   if (P.done) return;
-  P.shots++; P.flash = 0.08;
+  P.flash = 0.08;
+  // nothing to shoot at yet: the gun fires, but it isn't a shot taken (no miss, no tilt)
+  if (!enemies.some((e) => e.state === "out" || e.state === "stepping")) return;
+  P.shots++;
   const c = Math.round(col + P.jit), r = Math.round(row);
   const hit = enemies.filter((e) => e.state === "out" || e.state === "stepping")
     .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && r >= e.sy[0] - 1 && r <= e.sy[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)
@@ -228,7 +234,7 @@ function step(dt) {
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   while (P.script.length && P.script[0][0] <= P.t) P.script.shift()[1]();
-  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (P.streak - 1) * 1.4 : 0;
+  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.7 : 0;
   if (P.done) return;
 
   const active = enemies.filter((e) => e.state === "stepping" || e.state === "out");
@@ -265,7 +271,7 @@ const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = (ev.clie
 view.addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
 // a click on a message box closes it (and isn't a shot)
-$("bannerText").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
+$("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 $("again").addEventListener("click", () => { if (!P) return; build(); $("banner").hidden = true; bannerT = 0; });
 
 $("version").textContent = "v" + VERSION;
