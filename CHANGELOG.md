@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.4.3 — "Cover Plate"
+**Wed Oct 21, 2026 · 8:35 AM HST**
+
+- The Glock is bigger and more detailed: white dots on the rear sight, the slide's top edge, the cover plate on its back, the frame and the textured grip. It moves up and down less: one row when it's far out to the side, one row when it fires. Removed: the smaller gun and its two-row dip.
+
 ## v0.4.2 — "Glock"
 **Wed Oct 21, 2026 · 8:33 AM HST**
 

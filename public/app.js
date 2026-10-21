@@ -9,10 +9,21 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// the gun, at the bottom middle of the view (drawn in render()): a Glock 17 seen from behind, as you'd hold it. The
-// front sight post sits in the rear sight's notch; under them the slide, the frame and the top of the grip.
+// the gun, at the bottom middle of the view (drawn in render()): a Glock 17 seen from behind, as you'd hold it. Top to
+// bottom: the front sight post in the rear sight's notch, the rear sight with its two white dots, the slide (its top
+// edge, the cover plate on its back, its bottom), the frame under it and the top of the textured grip.
 const GUN_SWING = 8;    // the most the gun moves left or right, in cells
-const GUN = ["     _||_     ", "   _|    |_   ", "  |========|  ", "  |########|  ", "  |########|  ", "  |___##___|  ", "     |##|     "];
+const GUN = [
+  "       _||_       ",
+  "  ___o|    |o___  ",
+  " |==============| ",
+  " |  __________  | ",
+  " | |          | | ",
+  " | |__________| | ",
+  " |______________| ",
+  "   |__________|   ",
+  "    |########|    ",
+];
 
 let day = "", SEED = 0, myName = null;
 let open, enemies, squad, feed, P;
@@ -115,10 +126,10 @@ function render() {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
-  // the gun: one rigid piece at the bottom middle, moving after the crosshair along a small arc (it dips as it goes
-  // out to the side). P.gx eases toward the pointer in step().
+  // the gun: one rigid piece at the bottom middle, moving after the crosshair along a small arc (one row lower once it is
+  // more than halfway out to the side) and kicking down a row when it fires. P.gx eases toward the pointer in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, (P.gx - W / 2) * 0.2));
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + Math.round(lean * lean / 32) + (P.flash > 0 ? 1 : 0);
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
   GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 2 ? "g" : "t"); });
 
   let out = "";
