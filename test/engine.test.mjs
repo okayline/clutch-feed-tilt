@@ -4,17 +4,37 @@ import { readFileSync } from "node:fs";
 import * as C from "../public/engine/corridor.js";
 import { VERSION } from "../public/engine/version.js";
 
-test("a corridor: the same seed gives the same corridor; 3 enemies in open alcoves; 4 teammates", () => {
+test("a map: the same seed gives the same map; the rails run through open tiles from room to room; 3 enemies in notches; 4 teammates", () => {
   const a = C.corridor(12345), b = C.corridor(12345);
   assert.deepEqual(a, b);
-  assert.equal(a.enemies.length, 3);
-  for (const e of a.enemies) {
-    assert.ok(a.open[Math.floor(e.y)][Math.floor(e.x)], "an enemy waits in an open cell");
-    assert.ok([1.5, 5.5].includes(e.x), "in an alcove beside the corridor");
+  assert.notDeepEqual(C.corridor(1).path, C.corridor(2).path, "another day, another map");
+  for (const seed of [1, 2, 3, 12345, 3359765128]) {
+    const c = C.corridor(seed);
+    assert.ok(c.route.length >= 4, "at least 4 rooms on the rails");
+    // every step between rooms is one room (7 tiles) north, east, south or west, through open tiles all the way
+    for (let i = 1; i < c.path.length; i++) {
+      const p = c.path[i - 1], q = c.path[i];
+      assert.equal(Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 7);
+      for (let t = 0; t <= 7; t++) assert.ok(c.open[Math.floor(p.y + (q.y - p.y) * t / 7)][Math.floor(p.x + (q.x - p.x) * t / 7)], `seed ${seed}: the rails are open`);
+    }
+    assert.ok(new Set(c.path.slice(1).map((q, i) => (q.x - c.path[i].x) + "," + (q.y - c.path[i].y))).size > 1, `seed ${seed}: the rails turn`);
+    assert.equal(c.enemies.length, 3);
+    for (const e of c.enemies) {
+      assert.ok(c.open[Math.floor(e.y)][Math.floor(e.x)], "an enemy waits in an open notch");
+      assert.ok(c.open[Math.floor(e.ty)][Math.floor(e.tx)], "and steps out into the room");
+      assert.ok(e.s > 0 && e.s <= c.end + 3);
+    }
+    assert.deepEqual(c.squad.map((m) => m.tag), ["ghost", "ghost", "ghost", "bot"]);
   }
-  assert.deepEqual(a.squad.map((m) => m.tag), ["ghost", "ghost", "ghost", "bot"]);
-  assert.equal(a.open[C.ML - 1][3], false, "the far wall is closed");
-  assert.notDeepEqual(C.corridor(1).enemies, C.corridor(2).enemies, "another day, another corridor");
+});
+
+test("along the rails: halfway between two rooms you are halfway and face the way the rails go", () => {
+  const path = [{ x: 3.5, y: 3.5 }, { x: 10.5, y: 3.5 }, { x: 10.5, y: 10.5 }];   // east, then south
+  assert.deepEqual(C.along(path, 3.5), { x: 7, y: 3.5, dx: 1, dy: 0 });
+  const mid = C.along(path, 7);   // at the turn: halfway round, facing south-east
+  assert.ok(Math.abs(mid.dx - Math.SQRT1_2) < 1e-9 && Math.abs(mid.dy - Math.SQRT1_2) < 1e-9);
+  const after = C.along(path, 10.5);
+  assert.ok(Math.abs(after.x - 10.5) < 1e-9 && Math.abs(after.y - 7) < 1e-9 && Math.abs(after.dy - 1) < 1e-9);
 });
 
 test("the label: died = FEED; won with shots > 2.5 x hits = TILT; else CLUTCH", () => {

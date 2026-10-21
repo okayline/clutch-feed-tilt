@@ -1,5 +1,6 @@
 // The page: draws the frame and the view, runs the fight, and names the run. The rules are in engine/corridor.js.
 import * as C from "./engine/corridor.js";
+import FLOOR from "./engine/floor.js";
 import { VERSION } from "./engine/version.js";
 import { setupAccount, openPlayer, closePlayer, isOpen as userOpen } from "./account.js";
 
@@ -30,19 +31,19 @@ const GUN = [
 ];
 
 let day = "", SEED = 0, myName = null;
-let open, enemies, squad, feed, P;
-const isOpen = (x, y) => x >= 0 && y >= 0 && x < C.MW && y < C.ML && open[y][x];
+let cor, open, enemies, squad, feed, P;
+const isOpen = (x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && open[y][x];
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
-  const cor = C.corridor(SEED);
+  cor = C.corridor(SEED);
   open = cor.open;
-  enemies = cor.enemies.map((e) => ({ ...e, hx: e.x, state: "hidden", out: 0, dieT: 0 }));
+  enemies = cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0 }));
   squad = cor.squad.map((m) => ({ ...m, k: 0, dead: false }));
   // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down.
   const s = squad, t0 = cor.t0;
   P = {
-    y: C.START, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
+    s: 0, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
     left: C.ENEMIES, phase: "push", done: null, log: [],
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
@@ -71,15 +72,16 @@ const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x]
 
 function render() {
   for (let y = 0; y < H; y++) { ch[y].fill(" "); cl[y].fill(""); }
-  const px = 3.5, py = P.y;
+  // the camera: on the rails, facing along them; the plane points to your right
+  const { x: px, y: py, dx: fx, dy: fy } = C.along(cor.path, P.s), plx = -fy * 0.66, ply = fx * 0.66;
   for (let x = 0; x < W; x++) {
-    const cam = 2 * x / W - 1, rdx = 0.66 * cam, rdy = 1;
+    const cam = 2 * x / W - 1, rdx = fx + plx * cam, rdy = fy + ply * cam;
     let mx = Math.floor(px), my = Math.floor(py);
-    const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / rdy);
-    const sx = rdx < 0 ? -1 : 1;
-    let sdx = rdx < 0 ? (px - mx) * ddx : (mx + 1 - px) * ddx, sdy = (my + 1 - py) * ddy, side = 0;
+    const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
+    const sx = rdx < 0 ? -1 : 1, sy = rdy < 0 ? -1 : 1;
+    let sdx = rdx < 0 ? (px - mx) * ddx : (mx + 1 - px) * ddx, sdy = rdy < 0 ? (py - my) * ddy : (my + 1 - py) * ddy, side = 0;
     for (let i = 0; i < 80; i++) {
-      if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += 1; side = 1; }
+      if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
       if (!isOpen(mx, my)) break;
     }
     const d = side === 0 ? sdx - ddx : sdy - ddy;
@@ -87,21 +89,22 @@ function render() {
     const hit = side === 0 ? py + d * rdy : px + d * rdx, frac = hit - Math.floor(hit);
     const wh = H / d, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
     const r = Math.min(RAMP.length - 1, Math.floor(d / 1.6) + (side === 1 ? 1 : 0));
-    const seam = side === 0 && (frac < 0.06 || frac > 0.94) && d < 9;
+    const seam = (frac < 0.06 || frac > 0.94) && d < 9;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
       put(x, y, seam ? "|" : (y === top || y === bot - 1) && d < 12 ? "_" : RAMP[r], d > 14 ? "d" : d > 7 ? "t" : "");
     }
-    // the floor grid
+    // the floor grid: only the lines running the way you face, so nothing scrolls toward you
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
       const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
-      const wx = px + rd * rdx, fx = wx - Math.floor(wx);
-      if (fx < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
+      const wv = Math.abs(fx) < Math.abs(fy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
+      if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
   }
   // enemies, far to near
-  const vis = enemies.filter((e) => e.state !== "hidden" || e.y - py < 9).sort((a, b) => (b.y - py) - (a.y - py));
+  const depth = (e) => (e.x - px) * fx + (e.y - py) * fy;
+  const vis = enemies.filter((e) => e.state !== "hidden" || e.s - P.s < 9).sort((a, b) => depth(b) - depth(a));
   for (const e of vis) {
-    const rx = e.x - px, ry = e.y - py; if (ry < 0.3) continue;
+    const ry = depth(e), rx = (e.x - px) * plx / 0.66 + (e.y - py) * ply / 0.66; if (ry < 0.3) continue;
     const sxc = (W / 2) * (1 + rx / 0.66 / ry);
     let sh = H * 0.8 / ry; const sw = 0.5 * W / (1.32 * ry);
     if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / 0.5);
@@ -186,7 +189,8 @@ function frame(message) {
     ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
                          [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
     [[rule, "d"]],
-    ...Array.from({ length: 6 }, () => [[""]]),
+    [[""]],
+    ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
     [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
@@ -204,6 +208,21 @@ function frame(message) {
   while (log.length < 3) log.unshift(["", ""]);
   L.push(top, ...log.map(([t, c]) => "|" + seg([[" " + t, c]], FW - 2) + "|"), dash, "|" + seg(status, FW - 2) + "|", top);
   setFrame(L.join("\n"));
+}
+
+// 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms of the rails you've walked
+// through, the ways out of them, and an arrow for the way you face. floor.js draws extra hallways out of room 0 (an
+// irl-dungeon rule), so it is handed the floor with every room number moved up by one.
+function minimap() {
+  const k = Math.min(cor.route.length - 1, Math.round(P.s / C.S)), f = cor.floor, up = (j) => j + 1;
+  const view = {
+    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, doors: Object.fromEntries(Object.entries(r.doors).map(([d, j]) => [d, up(j)])) })],
+    start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
+  };
+  const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;
+  const { dx, dy } = C.along(cor.path, P.s);
+  const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N";
+  return FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing });
 }
 
 // ---- banner -------------------------------------------------------------------------------------------------
@@ -290,13 +309,13 @@ function step(dt) {
   if (P.done) return;
 
   const active = enemies.filter((e) => e.state === "stepping" || e.state === "out");
-  const next = enemies.find((e) => e.state === "hidden" && e.y - P.y < 4.2);
-  if (next && P.phase !== "push") enemies.filter((e) => e.state === "hidden" && Math.abs(e.y - next.y) < 1).forEach((e) => e.state = "stepping");
-  const stopAt = Math.min(...enemies.filter((e) => e.state === "hidden").map((e) => e.y - 4.0), C.END);
-  if (!active.length && !next) P.y = Math.min(stopAt, P.y + 1.25 * dt);
+  const next = enemies.find((e) => e.state === "hidden" && e.s - P.s < 4.2);
+  if (next && P.phase !== "push") enemies.filter((e) => e.state === "hidden" && Math.abs(e.s - next.s) < 2).forEach((e) => e.state = "stepping");
+  const stopAt = Math.min(...enemies.filter((e) => e.state === "hidden").map((e) => e.s - 4.0), cor.end);
+  if (!active.length && !next) P.s = Math.min(stopAt, P.s + 1.25 * dt);
 
   for (const e of enemies) {
-    if (e.state === "stepping") { e.out = Math.min(1, e.out + dt / 0.45); e.x = e.hx + (e.tx - e.hx) * e.out; if (e.out >= 1) e.state = "out"; }
+    if (e.state === "stepping") { e.out = Math.min(1, e.out + dt / 0.45); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }
     else if (e.state === "out") {
       e.fire -= dt;
       if (e.fire <= 0) {
@@ -306,7 +325,7 @@ function step(dt) {
       }
     } else if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.5) e.state = "dead"; }
   }
-  if (enemies.every((e) => e.state === "dead") && P.y >= C.END - 0.01) finish();
+  if (enemies.every((e) => e.state === "dead") && P.s >= cor.end - 0.01) finish();
 }
 
 let last = 0;

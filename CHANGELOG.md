@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5 — "Wings"
+**Wed Oct 21, 2026 · 8:46 AM HST**
+
+- The corridor is now a map of rooms from 4Dungeon's wing generator, the same for everyone each day. You still run on rails, and they turn with the rooms. Enemies wait in notches in the walls, and a minimap shows the rooms you've passed. Removed: the one straight corridor and its alcoves.
+
 ## v0.4.4 — "Sight Line"
 **Wed Oct 21, 2026 · 8:47 AM HST**
 
