@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.4.4 — "Sight Line"
+**Wed Oct 21, 2026 · 8:47 AM HST**
+
+- You see the Glock from a little above now: the top of the slide narrows away from you to the front sight, with the rear sight across its back edge. Removed: the front sight sitting flat in the rear sight's notch.
+
 ## v0.4.3 — "Cover Plate"
 **Wed Oct 21, 2026 · 8:35 AM HST**
 

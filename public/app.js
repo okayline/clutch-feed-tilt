@@ -9,13 +9,17 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-// the gun, at the bottom middle of the view (drawn in render()): a Glock 17 seen from behind, as you'd hold it. Top to
-// bottom: the front sight post in the rear sight's notch, the rear sight with its two white dots, the slide (its top
-// edge, the cover plate on its back, its bottom), the frame under it and the top of the textured grip.
+// the gun, at the bottom middle of the view (drawn in render()): a Glock 17 from behind and a little above, as you'd
+// hold it. Worked out from its real size (slide 186 x 25.5 x 30 mm) seen from 15 cm behind it: the top of the slide
+// shows as 3 rows narrowing to under half its width at the front, with the front sight post there; the rear sight
+// (two white dots, the notch between) across its back edge; then the back of the slide (its cover plate), the frame and
+// the top of the textured grip.
 const GUN_SWING = 8;    // the most the gun moves left or right, in cells
 const GUN = [
-  "       _||_       ",
-  "  ___o|    |o___  ",
+  "      _.||._      ",
+  "     /      \\     ",
+  "    /        \\    ",
+  "  _/_o_|  |_o_\\_  ",
   " |==============| ",
   " |  __________  | ",
   " | |          | | ",
@@ -130,7 +134,7 @@ function render() {
   // more than halfway out to the side) and kicking down a row when it fires. P.gx eases toward the pointer in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, (P.gx - W / 2) * 0.2));
   const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
-  GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 2 ? "g" : "t"); });
+  GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });
 
   let out = "";
   for (let y = 0; y < H; y++) {
