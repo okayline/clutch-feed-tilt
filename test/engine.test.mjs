@@ -103,6 +103,16 @@ test("an enemy takes 3 body shots, or 1 headshot", () => {
   assert.deepEqual([R.hits, R.kills, R.heads], [b ? 4 : 3, b ? 2 : 1, b ? 1 : 0]);
 });
 
+test("tilt: a miss adds 0.5 with no enemy on the view; with one on it, 1.5 and at least half the bar (2.5)", () => {
+  const R = C.newRun(C.corridor(12345, "2026-10-21"));
+  assert.equal(C.fire(R, 40, 10), false); assert.equal(R.streak, 0.5);
+  while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
+  const b = C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out"));
+  assert.ok(b.rr >= 0 && b.l < C.W, "the enemy is on the view");
+  assert.equal(C.fire(R, b.l > 10 ? 0 : 93, 1), false); assert.equal(R.streak, 2.5);
+  C.fire(R, b.l > 10 ? 0 : 93, 1); assert.equal(R.streak, 4);
+});
+
 test("replay: no shots and you die with 0 hits; shots that aren't a run are refused", () => {
   const cor = C.corridor(12345, "2026-10-21"), R = C.replay(cor, []);
   assert.deepEqual([R.hp, R.shots, R.hits, C.label(R)], [0, 0, 0, "FEED"]);

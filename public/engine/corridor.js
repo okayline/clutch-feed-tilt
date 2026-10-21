@@ -202,6 +202,7 @@ const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ti
 const FIRE_TICKS = 25;                // then fires every 25 ticks
 const DIE_TICKS = 8;
 export const ENEMY_HP = 3;            // body shots to drop an enemy; a headshot drops it in one
+export const TILT_SEEN = 1.5, TILT_BLIND = 0.5, TILT_HALF = 2.5;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; half the bar
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
 export const MAX_TICKS = 9000;        // ten minutes: no run is longer
 export const MAX_SHOTS = 2000;
@@ -220,7 +221,7 @@ export function newRun(cor) {
 export const turning = (R) => R.turns.length > 0 && R.s >= R.turns[0] * S;
 export const eyeOf = (R) => along(R.cor.path, R.s, turning(R) ? R.tt / TURN_TICKS : 0);
 
-// The crosshair shakes while you tilt: two zig-zags, a few ticks long each, as wide as the tilt.
+// The crosshair shakes while you tilt (2 or more): two zig-zags, a few ticks long each, as wide as the tilt.
 const tri = (n, p) => Math.abs(((n % p) / p) * 4 - 2) - 1;
 export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (Math.min(5, R.streak) - 1) * 0.35 : 0;
 
@@ -295,7 +296,8 @@ export function fire(R, col, row) {
   R.shots++;
   const c = Math.round(col + jit(R)), r = Math.round(row), eye = eyeOf(R);
   const wall = cast(R.cor, eye, Math.max(0, Math.min(W - 1, c))).d;
-  const hit = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }))
+  const up = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }));
+  const hit = up
     .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
     .sort((a, b) => a.b.ry - b.b.ry)[0];
   let got = false;
@@ -307,7 +309,11 @@ export function fire(R, col, row) {
     if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }
     // tilt comes down by half on a hit, and all the way on the second hit in a row
     R.calm++; R.streak = R.calm >= 2 ? 0 : Math.floor(Math.min(5, R.streak) / 2);
-  } else { R.streak++; R.calm = 0; }
+  } else {
+    // a miss with an enemy on the view tilts you more than a shot at nothing
+    // and always leaves the bar at least half full (TILT_HALF of 5)
+    R.streak = up.some(({ b }) => b && b.rr >= 0 && b.l < W) ? Math.max(TILT_HALF, R.streak + TILT_SEEN) : R.streak + TILT_BLIND; R.calm = 0;
+  }
   R.log.push([R.tick, col, row, hit ? 1 : 0]);
   return got;
 }

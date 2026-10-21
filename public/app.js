@@ -173,13 +173,13 @@ function frame(message) {
   }
   const rule = " " + "-".repeat(PW - 2) + " ";
   const hpBar = "[" + "#".repeat(P.hp) + " ".repeat(C.HP - P.hp) + "]";
-  const tilt = Math.min(5, P.streak);
+  const tilt = Math.round(2 * Math.min(5, P.streak));   // the bar has 10 cells, one per half point of tilt
   const secs = P.tick / C.FPS, time = `${Math.floor(secs / 60)}:${(secs % 60).toFixed(1).padStart(4, "0")}`;
   const acc = P.shots ? Math.round(100 * P.hits / P.shots) : 0;
   const rows = [
     [[" SQUAD", ""], ["            HP    K", "t"]],
     [[rule, "d"]],
-    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.hits), "b"]],
+    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.kills ?? "-"), "b"]],
     ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
                          [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
     [[rule, "d"]],
@@ -187,7 +187,7 @@ function frame(message) {
     ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
-    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
+    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(10 - tilt) + "]", tilt >= 5 ? "e" : tilt ? "g" : "d"], ["  " + time, "t"]],
   ];
   const over = userOpen() || ledgerOpen();   // a panel covers the 3D view and the run waits
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
@@ -250,11 +250,12 @@ function showBanner(lines, secs) {
 function shoot(col, row) {
   if (P.done) return;
   P.flash = 0.08;
+  const was = P.streak;
   const hit = C.fire(P, col, row);
   if (hit === "head") { P.left--; say("YOU got a HEADSHOT", "b"); }
   else if (hit === "kill") { P.left--; say("YOU got a kill", "b"); }
   else if (hit === "body") say("YOU hit ENEMY", "t");
-  else if (hit === false && P.streak === 3) say("you're tilted", "g");
+  else if (hit === false && was < C.TILT_HALF && P.streak >= C.TILT_HALF) say("you're tilted", "g");
 }
 
 function finish() {
@@ -302,7 +303,7 @@ function seal() {
 // Today's run is already sealed: show it, and no new run until tomorrow's corridor.
 function showSealed(run) {
   build();
-  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, left: null, script: [], phase: "clutch", done: run.label,
+  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, kills: run.label === "FEED" ? null : enemies.length, left: null, script: [], phase: "clutch", done: run.label,
                      seal: `TODAY'S RUN IS SEALED: ENTRY #${run.entry}` });
   enemies.forEach((e) => e.state = "dead"); squad.forEach((m) => m.dead = true);
   say(`Sealed as ledger entry #${run.entry} (${run.hash.slice(0, 8)}). Next corridor at midnight UTC.`, "b");
