@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.4 — "Not Turned"
+**Wed Oct 21, 2026 · 1:09 PM HST**
+
+- The minimap is drawn exactly as 4Dungeon would draw this floor, not turned: you see the route spread along the wide side of the map, with its corners. The arrow starts pointing whichever way the route goes. Removed: v0.8.1's turn that made the first stretch point up, which squeezed the route into a short column.
+
 ## v0.9.3 — "Told on the Registry"
 **Wed Oct 21, 2026 · 1:08 PM HST**
 
