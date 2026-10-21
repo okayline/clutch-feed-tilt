@@ -89,10 +89,13 @@ function render() {
     zbuf[x] = d;
     const hit = side === 0 ? py + d * rdy : px + d * rdx, frac = hit - Math.floor(hit);
     const wh = H / d, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
-    const r = Math.min(RAMP.length - 1, Math.floor(d / 1.6) + (side === 1 ? 1 : 0));
-    const seam = (frac < 0.06 || frac > 0.94) && d < 9;
+    // shade by how far the wall block is from you, not by the ray's depth: turning doesn't change it, so the
+    // characters stay put on the walls instead of sliding across them
+    const td = Math.hypot(mx + 0.5 - px, my + 0.5 - py);
+    const r = Math.min(RAMP.length - 1, Math.floor(td / 1.6) + (side === 1 ? 1 : 0));
+    const seam = (frac < 0.06 || frac > 0.94) && td < 9;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-      put(x, y, seam ? "|" : (y === top || y === bot - 1) && d < 12 ? "_" : RAMP[r], d > 14 ? "d" : d > 7 ? "t" : "");
+      put(x, y, seam ? "|" : (y === top || y === bot - 1) && td < 12 ? "_" : RAMP[r], td > 14 ? "d" : td > 7 ? "t" : "");
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
@@ -329,12 +332,15 @@ function step(dt) {
   if (enemies.every((e) => e.state === "dead") && P.s >= cor.end - 0.01) finish();
 }
 
+// the game runs and draws at 15 frames a second, like an old PC, whatever the screen's refresh rate
+const FPS = 15;
 let last = 0;
 function loop(ts) {
-  const dt = Math.min(0.05, last ? (ts - last) / 1000 : 0); last = ts;
+  requestAnimationFrame(loop);
+  if (last && ts - last < 1000 / FPS - 2) return;
+  const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0); last = ts;
   if (!userOpen()) step(dt);
   render(); frame();
-  requestAnimationFrame(loop);
 }
 
 const view = $("view");
@@ -348,7 +354,7 @@ $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("ba
 
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
-// pointerdown, not click: the frame is redrawn every animation frame, so the span pressed may be gone by the release
+// pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
 $("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); });
 addEventListener("keydown", (ev) => { if (!userOpen() && P && (ev.key === "u" || ev.key === "U") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); openPlayer(); } });
 

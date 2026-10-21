@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.3 — "Fifteen"
+**Wed Oct 21, 2026 · 8:58 AM HST**
+
+- The game runs at 15 frames a second. Removed: drawing at your screen's full refresh rate.
+- Each block of wall keeps its own character while you turn. Removed: wall shading that slid across the walls as you looked around.
+
 ## v0.5.2 — "Stutter"
 **Wed Oct 21, 2026 · 8:51 AM HST**
 
