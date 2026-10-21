@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.1 — "Rib Lines"
+**Wed Oct 21, 2026 · 8:49 AM HST**
+
+- Lines run along the top of the gun's slide, from the rear sight toward the front sight. Removed: the plain, empty top of the slide.
+
 ## v0.5 — "Wings"
 **Wed Oct 21, 2026 · 8:46 AM HST**
 

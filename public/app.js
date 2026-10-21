@@ -12,14 +12,15 @@ const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // the gun, at the bottom middle of the view (drawn in render()): a Glock 17 from behind and a little above, as you'd
 // hold it. Worked out from its real size (slide 186 x 25.5 x 30 mm) seen from 15 cm behind it: the top of the slide
-// shows as 3 rows narrowing to under half its width at the front, with the front sight post there; the rear sight
+// shows as 3 rows narrowing to under half its width at the front, with the front sight post there and lines running
+// along it from the rear sight's notch and its sides toward the front; the rear sight
 // (two white dots, the notch between) across its back edge; then the back of the slide (its cover plate), the frame and
 // the top of the textured grip.
 const GUN_SWING = 8;    // the most the gun moves left or right, in cells
 const GUN = [
   "      _.||._      ",
-  "     /      \\     ",
-  "    /        \\    ",
+  "     /:|  |:\\     ",
+  "    /: |  | :\\    ",
   "  _/_o_|  |_o_\\_  ",
   " |==============| ",
   " |  __________  | ",
