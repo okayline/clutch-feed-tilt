@@ -186,4 +186,10 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
   assert.equal(b.run.hash, sha(a.run.hash + "|" + rec2));
   assert.deepEqual(env.DB.raw.prepare("SELECT record FROM ledger ORDER BY id").all().map((r) => r.record), [dayRec(day), rec1, rec2], "records hold ids, never names");
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM runs").get().n, 2);
+
+  // the LEDGER panel's list: newest first, the same records and hashes as sealed, paged with before and limit
+  const all = await call("ann", "GET", "/api/ledger");
+  assert.deepEqual(all.entries.map((e) => [e.kind, e.record, e.hash]), [["run", rec2, b.run.hash], ["run", rec1, a.run.hash], ["day", dayRec(day), dayHash]]);
+  const page = await call("ann", "GET", `/api/ledger?limit=1&before=${all.entries[0].id}`);
+  assert.deepEqual(page.entries.map((e) => e.hash), [a.run.hash]);
 });

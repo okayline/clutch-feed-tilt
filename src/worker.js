@@ -5,6 +5,7 @@
 //                                      your run today if you've sealed one
 //   POST /api/run {day, shots}         seal today's run on the ledger (one per player per day): the server plays it
 //                                      again from its shots, [[tick, col, row], ...], and seals what it got
+//   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
 //   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
@@ -49,6 +50,7 @@ const ROUTES = {
   "GET /api/today": today,
   "POST /api/name": setName,
   "POST /api/run": saveRun,
+  "GET /api/ledger": ledgerPage,
   "GET /api/account": account,
   "POST /api/codes": codes,
   "POST /api/load": loadCode,
@@ -188,6 +190,14 @@ async function saveRun(req, env) {
     }
   }
   throw new Oops("The ledger is busy. Try again in a moment.", 503);
+}
+
+// The chain, newest first, for the LEDGER panel (public: records hold player ids, never names).
+async function ledgerPage(req, env, url) {
+  const before = Number(url.searchParams.get("before")) || Number.MAX_SAFE_INTEGER;
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 30));
+  const { results } = await env.DB.prepare("SELECT id, kind, day, record, prev_hash, hash, created_at FROM ledger WHERE id < ? ORDER BY id DESC LIMIT ?").bind(before, limit).all();
+  return json({ entries: results });
 }
 
 // After a run is sealed, the ledger so far goes to the shared registry (dungeon-items, bound as REGISTRY) as a

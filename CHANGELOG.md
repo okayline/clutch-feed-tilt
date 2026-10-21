@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.1 — "In-game Ledger"
+**Wed Oct 21, 2026 · 1:04 PM HST**
+
+- [L]EDGER (or the L key) opens this game's own ledger in a panel inside the game, like USER: every sealed day and run, newest first, with its number, what it says (the day's level and wing, or the run's label, hits out of shots and HP) and the start of its hash. [SHOW OLDER] loads more. The run waits while it's open. Removed: the [L]EDGER link that opened the registry's page in a new tab.
+
 ## v0.9 — "Ledger"
 **Wed Oct 21, 2026 · 1:00 PM HST**
 
