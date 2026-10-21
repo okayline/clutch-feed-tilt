@@ -327,7 +327,7 @@ function step(dt) {
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   while (P.script.length && P.script[0][0] <= P.t) P.script.shift()[1]();
-  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.7 : 0;
+  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.35 : 0;
   if (P.done) return;
 
   const active = enemies.filter((e) => e.state === "stepping" || e.state === "out");

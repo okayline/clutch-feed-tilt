@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.10 — "Steadier"
+**Wed Oct 21, 2026 · 9:12 AM HST**
+
+- The crosshair shakes half as far while you're tilting. Removed: the wider shake.
+
 ## v0.5.9 — "Run It Back"
 **Wed Oct 21, 2026 · 9:12 AM HST**
 
