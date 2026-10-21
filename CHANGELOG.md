@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.4 — "Pan"
+**Wed Oct 21, 2026 · 9:02 AM HST**
+
+- You stop in the middle of a room to turn, and turn on the spot. While you turn, the walls just slide sideways. Removed: turning while walking through the room.
+- Each wall block's face is one flat panel with a line down its edge. Removed: walls that sloped inside a block, and lines placed by where a ray hit.
+
 ## v0.5.3 — "Fifteen"
 **Wed Oct 21, 2026 · 8:58 AM HST**
 

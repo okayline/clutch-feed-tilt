@@ -45,7 +45,7 @@ function build() {
   const s = squad, t0 = cor.t0;
   P = {
     s: 0, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
-    left: C.ENEMIES, phase: "push", done: null, log: [],
+    left: C.ENEMIES, phase: "push", done: null, log: [], turns: C.turns(cor.path), tt: 0,
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
       [t0 + 1.2, () => { s[3].dead = true; say(`BOT_FEEDER died`, "e"); }],
@@ -66,6 +66,10 @@ function clutchMoment() {
 
 // ---- drawing the view ---------------------------------------------------------------------------------------
 const RAMP = "@#%*+=-:";
+const COL = (15 * Math.PI / 180) / 21;   // how much further round each column of the view looks: 15 degrees is 21 columns
+const TURN_TIME = 0.8;                    // a turn on the spot: TURN_STEPS jumps of 15 degrees, two frames each at 15 fps
+const turning = () => P.turns.length > 0 && P.s >= P.turns[0] * C.S;
+const eye = () => C.along(cor.path, P.s, turning() ? P.tt / TURN_TIME : 0);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
@@ -73,10 +77,13 @@ const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x]
 
 function render() {
   for (let y = 0; y < H; y++) { ch[y].fill(" "); cl[y].fill(""); }
-  // the camera: on the rails, facing along them; the plane points to your right
-  const { x: px, y: py, dx: fx, dy: fy } = C.along(cor.path, P.s), plx = -fy * 0.66, ply = fx * 0.66;
+  // the camera: on the rails, facing along them. Each column looks COL further round than the one to its left and the
+  // walls are as tall as they are near, not as the ray is deep, so a turn on the spot slides the picture sideways and
+  // changes nothing else: a 15 degree jump moves it exactly 21 columns.
+  const { x: px, y: py, dx: fx, dy: fy } = eye(), base = Math.atan2(fy, fx), rail = C.along(cor.path, P.s);
+  let prev = "";
   for (let x = 0; x < W; x++) {
-    const cam = 2 * x / W - 1, rdx = fx + plx * cam, rdy = fy + ply * cam;
+    const th = base + (x + 0.5 - W / 2) * COL, rdx = Math.cos(th), rdy = Math.sin(th);
     let mx = Math.floor(px), my = Math.floor(py);
     const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
     const sx = rdx < 0 ? -1 : 1, sy = rdy < 0 ? -1 : 1;
@@ -87,30 +94,32 @@ function render() {
     }
     const d = side === 0 ? sdx - ddx : sdy - ddy;
     zbuf[x] = d;
-    const hit = side === 0 ? py + d * rdy : px + d * rdx, frac = hit - Math.floor(hit);
-    const wh = H / d, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
-    // shade by how far the wall block is from you, not by the ray's depth: turning doesn't change it, so the
-    // characters stay put on the walls instead of sliding across them
-    const td = Math.hypot(mx + 0.5 - px, my + 0.5 - py);
-    const r = Math.min(RAMP.length - 1, Math.floor(td / 1.6) + (side === 1 ? 1 : 0));
-    const seam = (frac < 0.06 || frac > 0.94) && td < 9;
+    // a panel is one face of one wall block: drawn flat, as tall as its middle is near, one character all over, with a
+    // line down its left edge. Only where you stand changes it, never which way you face.
+    const fcx = side === 0 ? mx + (sx < 0 ? 1 : 0) : mx + 0.5, fcy = side === 0 ? my + 0.5 : my + (sy < 0 ? 1 : 0);
+    const pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)), id = mx + "," + my + "," + side;
+    const wh = H / pd, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
+    const r = Math.min(RAMP.length - 1, Math.floor(pd / 1.6) + (side === 1 ? 1 : 0));
+    const seam = x > 0 && id !== prev && pd < 9; prev = id;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-      put(x, y, seam ? "|" : (y === top || y === bot - 1) && td < 12 ? "_" : RAMP[r], td > 14 ? "d" : td > 7 ? "t" : "");
+      put(x, y, seam ? "|" : (y === top || y === bot - 1) && pd < 12 ? "_" : RAMP[r], pd > 14 ? "d" : pd > 7 ? "t" : "");
     }
-    // the floor grid: only the lines running the way you face, so nothing scrolls toward you
+    // the floor grid: only the lines running the way the rails go, so nothing scrolls toward you
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
       const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
-      const wv = Math.abs(fx) < Math.abs(fy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
+      const wv = Math.abs(rail.dx) < Math.abs(rail.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
   }
   // enemies, far to near
-  const depth = (e) => (e.x - px) * fx + (e.y - py) * fy;
+  const depth = (e) => Math.hypot(e.x - px, e.y - py);
   const vis = enemies.filter((e) => e.state !== "hidden" || e.s - P.s < 9).sort((a, b) => depth(b) - depth(a));
   for (const e of vis) {
-    const ry = depth(e), rx = (e.x - px) * plx / 0.66 + (e.y - py) * ply / 0.66; if (ry < 0.3) continue;
-    const sxc = (W / 2) * (1 + rx / 0.66 / ry);
-    let sh = H * 0.8 / ry; const sw = 0.5 * W / (1.32 * ry);
+    const ry = depth(e); if (ry < 0.3) continue;
+    let da = Math.atan2(e.y - py, e.x - px) - base; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
+    if (Math.abs(da) > Math.PI / 2) continue;
+    const sxc = W / 2 + da / COL;
+    let sh = H * 0.8 / ry; const sw = 0.5 / ry / COL;
     if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / 0.5);
     if (e.state === "dead" || sh < 1) continue;
     const bot = Math.round(H / 2 + H / (2 * ry)), top = Math.round(bot - sh);
@@ -224,7 +233,7 @@ function minimap() {
     start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
   };
   const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;
-  const { dx, dy } = C.along(cor.path, P.s);
+  const { dx, dy } = eye();
   const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N";
   return FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing });
 }
@@ -316,7 +325,12 @@ function step(dt) {
   const next = enemies.find((e) => e.state === "hidden" && e.s - P.s < 4.2);
   if (next && P.phase !== "push") enemies.filter((e) => e.state === "hidden" && Math.abs(e.s - next.s) < 2).forEach((e) => e.state = "stepping");
   const stopAt = Math.min(...enemies.filter((e) => e.state === "hidden").map((e) => e.s - 4.0), cor.end);
-  if (!active.length && !next) P.s = Math.min(stopAt, P.s + 1.25 * dt);
+  if (!active.length && !next) {
+    // walk to the centre of the next room where the rails turn, turn there on the spot, then walk on
+    const j = P.turns[0];
+    if (turning()) { P.tt += dt; if (P.tt >= TURN_TIME) { P.turns.shift(); P.tt = 0; P.s = j * C.S + 1e-6; } }
+    else P.s = Math.min(stopAt, j === undefined ? Infinity : j * C.S, P.s + 1.25 * dt);
+  }
 
   for (const e of enemies) {
     if (e.state === "stepping") { e.out = Math.min(1, e.out + dt / 0.45); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }

@@ -108,21 +108,28 @@ export function corridor(seed) {
 }
 
 // Where you are on the rails, s tiles along them: { x, y } on the tile map and the way you face, { dx, dy }. You face
-// along the rails, and at a room where they turn you turn with them over the 3 tiles around its centre, in TURN_STEPS
-// jumps of 15 degrees (a stutter, like a low frame rate) rather than smoothly.
-export function along(path, s) {
-  const n = path.length, k = Math.max(0, Math.min(n - 2, Math.floor(s / S))), t = Math.max(0, Math.min(1, s / S - k));
+// along the rails. At a room where they turn you stop on its centre and turn on the spot: e (0 to 1) is how far round
+// you are, in TURN_STEPS jumps of 15 degrees (a stutter, like a low frame rate). Standing on the centre you still face
+// the way you came in; once past it, the way out.
+export function along(path, s, e = 0) {
+  const n = path.length, k = Math.max(0, Math.min(n - 2, Math.ceil(s / S) - 1)), t = Math.max(0, Math.min(1, s / S - k));
   const x = path[k].x + (path[k + 1].x - path[k].x) * t, y = path[k].y + (path[k + 1].y - path[k].y) * t;
-  const ang = (j) => Math.atan2(path[j + 1].y - path[j].y, path[j + 1].x - path[j].x);
-  let a = ang(k);
-  for (const j of [k, k + 1]) {   // the turns at either end of this stretch
-    if (j < 1 || j > n - 2 || Math.abs(s - j * S) >= 1.5) continue;
-    const u = (s - j * S + 1.5) / 3, e = Math.round(u * u * (3 - 2 * u) * TURN_STEPS) / TURN_STEPS;
-    let turn = ang(j) - ang(j - 1);
-    if (turn > Math.PI) turn -= 2 * Math.PI; if (turn < -Math.PI) turn += 2 * Math.PI;
-    a = ang(j - 1) + turn * e;
-  }
+  const a = ang(path, k) + (t === 1 && k + 1 <= n - 2 ? turnAt(path, k + 1) * Math.floor(e * TURN_STEPS) / TURN_STEPS : 0);
   return { x, y, dx: Math.cos(a), dy: Math.sin(a) };
+}
+
+// The rooms on the route where the rails turn: their indexes in path, in order.
+export function turns(path) {
+  const out = [];
+  for (let j = 1; j < path.length - 1; j++) if (turnAt(path, j)) out.push(j);
+  return out;
+}
+
+const ang = (path, j) => Math.atan2(path[j + 1].y - path[j].y, path[j + 1].x - path[j].x);
+function turnAt(path, j) {
+  let turn = ang(path, j) - ang(path, j - 1);
+  if (turn > Math.PI) turn -= 2 * Math.PI; if (turn < -Math.PI) turn += 2 * Math.PI;
+  return Math.abs(turn) < 1e-9 ? 0 : turn;
 }
 
 // What a finished run is called. Die and you fed; win while missing far more than you hit and you were tilting;
