@@ -265,15 +265,6 @@ view.addEventListener("pointermove", (ev) => { if (P) P.aim = colOf(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); P.aim = colOf(ev); shoot(P.aim); });
 $("again").addEventListener("click", () => { if (!P) return; build(); $("banner").hidden = true; bannerT = 0; });
 
-// ---- fit the 80 columns to the screen -----------------------------------------------------------------------
-function fit() {
-  const ratio = $("measure").getBoundingClientRect().width / 10 / 20 || 0.4;
-  const avail = Math.min(document.documentElement.clientWidth - 32, 1200);
-  $("game").style.fontSize = Math.max(6, Math.min(22, avail / (FW * ratio))).toFixed(2) + "px";
-}
-addEventListener("resize", fit);
-(document.fonts ? document.fonts.ready : Promise.resolve()).then(fit);
-fit();
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
 // pointerdown, not click: the frame is redrawn every animation frame, so the span pressed may be gone by the release

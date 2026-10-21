@@ -4,6 +4,15 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.1 — "Same Size"
+**Wed Oct 21, 2026 · 7:45 AM HST**
+
+- **The game window is the same size as 4Dungeon's and scoundrel.exe's now.** It was about twice as big on a computer; on a phone it fills the width like they do.
+- **Names are lowercase gamer tags now,** like lagspike, mogger99 or tiltproof. New players and rerolls get one of these.
+- Names you already have stay until you reroll. Removed: the two-word CamelCase names (SweatyNoScope style) for new players and rerolls, and the code that measured the font size in the page.
+
+---
+
 ## v0.3 — "Gamer Tags"
 **Wed Oct 21, 2026 · 7:45 AM HST**
 

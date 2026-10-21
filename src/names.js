@@ -1,24 +1,25 @@
-// Random player names, FPS gamer tags like SweatyNoScope (ryan, Oct 21: "fps gamer names"). Every player gets one when
-// they're made or next seen: nobody is nameless, and they can reroll it any time (POST /api/name).
-const PREFIXES = [
-  "Sweaty", "Tilted", "Camping", "Reloading", "Laggy", "Headshot", "NoScope", "Quick", "Silent", "Crispy",
-  "Toxic", "Salty", "Smurf", "Ratty", "Turbo", "Rusty", "Hardscope", "Wallhack", "Flashbang", "Fragging",
-  "Spawn", "Stealthy", "Rapid", "Ghost", "Lone", "Frosty", "Spicy", "Dank", "Big", "Tiny",
+// Random player names, lowercase FPS gamer tags like lagspike, mogger99 and tiltproof (ryan, Oct 21: "names like lagspike,
+// mogger99 or tiltproof"). Every player gets one when they're made or next seen: nobody is nameless, and they can reroll
+// it any time (POST /api/name).
+const WORDS = [
+  "lagspike", "tiltproof", "mogger", "clutchgod", "feedlord", "nosc0pe", "headglitch", "sweatlord", "campkid", "rushb",
+  "pingdiff", "hitreg", "wallbang", "flickshot", "aimlab", "lowfps", "highping", "respawn", "killcam", "deadeye",
+  "triggered", "salty", "toxicity", "smurfing", "bottomfrag", "topfrag", "ragequit", "rekt", "gitgud", "mainmenu",
+  "sprayhold", "peekaboo", "ninjadefuse", "lastalive", "oneshot", "twitchy", "jitterclick", "noobtube", "campfire", "frags",
 ];
-const NOUNS = [
-  "Sniper", "Camper", "Rusher", "Fragger", "Medic", "Noob", "Ninja", "Wolf", "Viper", "Reaper",
-  "Hawk", "Tank", "Cowboy", "Panda", "Goose", "Waffle", "Potato", "Toaster", "Pixel", "Bunny",
-  "Gremlin", "Raccoon", "Wizard", "Pickle", "Goblin", "Turtle", "Sheriff", "Pilot", "Bandit", "Yeti",
-];
-// names are at most 16 characters, so only the pairs that fit
-const PAIRS = PREFIXES.flatMap((a) => NOUNS.map((n) => `${a}${n}`)).filter((s) => s.length <= 16);
+const rand2 = (rand) => String(10 + Math.floor(rand() * 90));
+// names are at most 16 characters
+function pick(rand) {
+  const w = WORDS[Math.floor(rand() * WORDS.length)];
+  return rand() < 0.4 ? w + rand2(rand) : w;
+}
 
 // Give this player a random name nobody has, if they have none (or a different one, with reroll). Returns the player
-// with its name (unchanged only if every try hit a taken name, which won't happen until most of the pairs are used).
+// with its name (unchanged only if every try hit a taken name).
 export async function giveName(env, p, { reroll = false, rand = Math.random } = {}) {
   if (!p || (p.name && !reroll)) return p;
   for (let i = 0; i < 40; i++) {
-    const name = PAIRS[Math.floor(rand() * PAIRS.length)];
+    const name = pick(rand);
     if (name === p.name) continue;
     try {
       const r = await env.DB.prepare(`UPDATE players SET name = ?, name_key = ? WHERE id = ?${reroll ? "" : " AND name IS NULL"}`)
