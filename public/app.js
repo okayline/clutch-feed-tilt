@@ -67,7 +67,7 @@ function clutchMoment() {
 // ---- drawing the view ---------------------------------------------------------------------------------------
 const RAMP = "@#%*+=-:";
 const COL = (15 * Math.PI / 180) / 21;   // how much further round each column of the view looks: 15 degrees is 21 columns
-const TURN_TIME = 0.8;                    // a turn on the spot: TURN_STEPS jumps of 15 degrees, two frames each at 15 fps
+const TURN_TIME = 2.4;                    // a turn on the spot: TURN_STEPS jumps of 15 degrees, six frames each at 15 fps
 const turning = () => P.turns.length > 0 && P.s >= P.turns[0] * C.S;
 const eye = () => C.along(cor.path, P.s, turning() ? P.tt / TURN_TIME : 0);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));

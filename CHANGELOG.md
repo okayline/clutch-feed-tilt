@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.6 — "Slow Pan"
+**Wed Oct 21, 2026 · 9:04 AM HST**
+
+- Turns take 2.4 seconds. Removed: the quick 0.8 second turn.
+
 ## v0.5.5 — "Every Shot"
 **Wed Oct 21, 2026 · 9:03 AM HST**
 
