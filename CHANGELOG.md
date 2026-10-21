@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.7 — "Replay"
+**Wed Oct 21, 2026 · 12:22 PM HST**
+
+- The server plays your run again before sealing it. The page sends only your shots and when you fired them; the server replays today's corridor with those shots and seals the result it gets. Removed: sealing the HP, hits and shots the page reported.
+- The fight runs in fixed steps, 15 a second, the same on every device. While you're tilting, the crosshair shakes in a zig-zag of the same width. Removed: the shake's sine waves, and timers that ran on frame time.
+
 ## v0.6 — "B3F"
 **Wed Oct 21, 2026 · 9:20 AM HST**
 

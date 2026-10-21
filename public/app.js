@@ -4,7 +4,7 @@ import FLOOR from "./engine/floor.js";
 import { VERSION } from "./engine/version.js";
 import { setupAccount, openPlayer, closePlayer, isOpen as userOpen } from "./account.js";
 
-const W = 94, H = 34;                // the view window at half-size characters: 47 x 17 cells of the frame, doubled
+const W = C.W, H = C.H;              // the view window at half-size characters: 47 x 17 cells of the frame, doubled
 const FW = 80, PW = 30, VWc = 47;
 const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -32,20 +32,19 @@ const GUN = [
 ];
 
 let day = "", SEED = 0, myName = null;
-let cor, open, enemies, squad, feed, P;
-const isOpen = (x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && open[y][x];
+let cor, enemies, squad, feed, P, lag = 0;
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
   cor = C.corridor(SEED, day);
-  open = cor.open;
-  enemies = cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0 }));
+  // the fight itself (where you are, HP, shots, enemies) is the engine's run (corridor.js newRun); the rest is the page's
+  P = Object.assign(C.newRun(cor), { aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null });
+  enemies = P.enemies; lag = 0;
   squad = cor.squad.map((m) => ({ ...m, k: 0, dead: false }));
-  // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down.
+  // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down. The last line is
+  // the tick the engine turns it 1 v 3 (newRun clutchTick).
   const s = squad, t0 = cor.t0;
-  P = {
-    s: 0, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, calm: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
-    left: C.ENEMIES, phase: "push", done: null, log: [], turns: C.turns(cor.path), tt: 0,
+  Object.assign(P, {
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
       [t0 + 1.2, () => { s[3].dead = true; say(`BOT_FEEDER died`, "e"); }],
@@ -53,23 +52,19 @@ function build() {
       [t0 + 2.7, () => { s[2].k++; P.left--; say(`${s[2].n} got a kill`, "h"); }],
       [t0 + 3.3, () => { s[2].dead = true; say(`${s[2].n} died`, "e"); }],
       [t0 + 3.9, () => { s[0].dead = true; say(`${s[0].n} died`, "e"); clutchMoment(); }],
-    ],
-  };
+    ].map(([t, fn]) => [C.ticksOf(t), fn]),
+  });
   feed = [];
 }
 function say(t, c) { feed.push([t.slice(0, 77), c]); if (feed.length > 3) feed.shift(); }
 
 function clutchMoment() {
-  P.phase = "clutch";
   showBanner([["", ""], ["   1 v " + P.left + "   ", "big g"], ["", ""], ["  LAST ONE ALIVE  ", "b"]], 1.6);
 }
 
 // ---- drawing the view ---------------------------------------------------------------------------------------
 const RAMP = "@#%*+=-:";
-const COL = (15 * Math.PI / 180) / 21;   // how much further round each column of the view looks: 15 degrees is 21 columns
-const TURN_TIME = 2.4;                    // a turn on the spot: TURN_STEPS jumps of 15 degrees, six frames each at 15 fps
-const turning = () => P.turns.length > 0 && P.s >= P.turns[0] * C.S;
-const eye = () => C.along(cor.path, P.s, turning() ? P.tt / TURN_TIME : 0);
+const eye = () => C.eyeOf(P);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
@@ -80,19 +75,11 @@ function render() {
   // the camera: on the rails, facing along them. Each column looks COL further round than the one to its left and the
   // walls are as tall as they are near, not as the ray is deep, so a turn on the spot slides the picture sideways and
   // changes nothing else: a 15 degree jump moves it exactly 21 columns.
-  const { x: px, y: py, dx: fx, dy: fy } = eye(), base = Math.atan2(fy, fx), rail = C.along(cor.path, P.s);
+  const E = eye(), { x: px, y: py } = E, rail = C.along(cor.path, P.s);
   let prev = "";
   for (let x = 0; x < W; x++) {
-    const th = base + (x + 0.5 - W / 2) * COL, rdx = Math.cos(th), rdy = Math.sin(th);
-    let mx = Math.floor(px), my = Math.floor(py);
-    const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
-    const sx = rdx < 0 ? -1 : 1, sy = rdy < 0 ? -1 : 1;
-    let sdx = rdx < 0 ? (px - mx) * ddx : (mx + 1 - px) * ddx, sdy = rdy < 0 ? (py - my) * ddy : (my + 1 - py) * ddy, side = 0;
-    for (let i = 0; i < 80; i++) {
-      if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-      if (!isOpen(mx, my)) break;
-    }
-    const d = side === 0 ? sdx - ddx : sdy - ddy;
+    // the same ray the engine uses to tell whether a shot hits a wall first (corridor.js cast)
+    const { d, side, mx, my, sx, sy, rdx, rdy } = C.cast(cor, E, x);
     zbuf[x] = d;
     // a panel is one face of one wall block: drawn flat, as tall as its middle is near, one character all over, with a
     // line down its left edge. Only where you stand changes it, never which way you face.
@@ -112,19 +99,10 @@ function render() {
     }
   }
   // enemies, far to near
-  const depth = (e) => Math.hypot(e.x - px, e.y - py);
-  const vis = enemies.filter((e) => e.state !== "hidden" || e.s - P.s < 9).sort((a, b) => depth(b) - depth(a));
-  for (const e of vis) {
-    const ry = depth(e); if (ry < 0.3) continue;
-    let da = Math.atan2(e.y - py, e.x - px) - base; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
-    if (Math.abs(da) > Math.PI / 2) continue;
-    const sxc = W / 2 + da / COL;
-    let sh = H * 0.8 / ry; const sw = 0.5 / ry / COL;
-    if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / 0.5);
-    if (e.state === "dead" || sh < 1) continue;
-    const bot = Math.round(H / 2 + H / (2 * ry)), top = Math.round(bot - sh);
-    const l = Math.round(sxc - sw / 2), rr = Math.round(sxc + sw / 2);
-    e.sx = [l, rr]; e.sy = [top, bot]; e.sd = ry;
+  // the same boxes the engine checks a shot against (corridor.js enemyBox)
+  const vis = enemies.filter((e) => e.state !== "hidden" || e.s - P.s < 9).map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b)
+    .sort((a, b) => b[1].ry - a[1].ry);
+  for (const [e, { sxc, ry, sh, l, rr, top, bot }] of vis) {
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       const u = (x - l) / Math.max(1, rr - l);
@@ -138,7 +116,7 @@ function render() {
         if (c) put(x, y, c, "e");
       }
     }
-    if (e.state === "out" && e.fire < 0.7 && Math.floor(P.t * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
+    if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
   // crosshair
   const ax = Math.round(P.aim + P.jit), ay = Math.round(P.aimY);
@@ -195,7 +173,7 @@ function frame(message) {
   const rule = " " + "-".repeat(PW - 2) + " ";
   const hpBar = "[" + "#".repeat(P.hp) + " ".repeat(C.HP - P.hp) + "]";
   const tilt = Math.min(5, P.streak);
-  const time = `${Math.floor(P.t / 60)}:${(P.t % 60).toFixed(1).padStart(4, "0")}`;
+  const secs = P.tick / C.FPS, time = `${Math.floor(secs / 60)}:${(secs % 60).toFixed(1).padStart(4, "0")}`;
   const acc = P.shots ? Math.round(100 * P.hits / P.shots) : 0;
   const rows = [
     [[" SQUAD", ""], ["            HP    K", "t"]],
@@ -256,25 +234,13 @@ function showBanner(lines, secs) {
 }
 
 // ---- play ---------------------------------------------------------------------------------------------------
+// A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, col, row, hit]).
 function shoot(col, row) {
   if (P.done) return;
   P.flash = 0.08;
-  P.shots++;   // every shot counts, with or without anything to shoot at: firing at nothing is a miss
-  const c = Math.round(col + P.jit), r = Math.round(row);
-  const hit = enemies.filter((e) => e.state === "out" || e.state === "stepping")
-    .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && r >= e.sy[0] - 1 && r <= e.sy[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)
-    .sort((a, b) => a.sd - b.sd)[0];
-  if (hit) {
-    hit.state = "dying"; hit.dieT = 0; P.hits++; P.left--;
-    // tilt comes down by half on a hit, and all the way on the second hit in a row
-    P.calm++; P.streak = P.calm >= 2 ? 0 : Math.floor(Math.min(5, P.streak) / 2);
-    say("YOU got a kill", "b");
-    P.log.push([+P.t.toFixed(2), c, r, 1]);
-  } else {
-    P.streak++; P.calm = 0;
-    P.log.push([+P.t.toFixed(2), c, r, 0]);
-    if (P.streak === 3) say("you're tilting...", "g");
-  }
+  const hit = C.fire(P, col, row);
+  if (hit) { P.left--; say("YOU got a kill", "b"); }
+  else if (hit === false && P.streak === 3) say("you're tilting...", "g");
 }
 
 function finish() {
@@ -300,15 +266,20 @@ function endBanner(kind) {
   showBanner(lines, Infinity);
 }
 
-// Send the finished run to be sealed on the ledger (one a day; the server checks it and names it again).
+// Send the finished run's shots to be sealed on the ledger (one a day). The server plays the run again from them and
+// seals what it got; if that isn't what this page got, the page shows the server's.
 function seal() {
   P.seal = "SEALING...";
-  const run = { day, hp: P.hp, shots: P.shots, hits: P.hits, log: P.log };
+  const run = { day, shots: P.log.map((s) => s.slice(0, 3)) };
   fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(run) })
     .then(async (r) => [r.ok, await r.json()])
     .then(([ok, b]) => {
       if (!ok) { P.seal = "NOT SEALED."; say(b.error || "The server said no.", "e"); return; }
       P.seal = `SEALED: LEDGER ENTRY #${b.run.entry}`;
+      if (b.run.hits !== P.hits || b.run.hp !== P.hp || b.run.shots !== P.shots) {
+        Object.assign(P, { hp: b.run.hp, shots: b.run.shots, hits: b.run.hits, done: b.run.label });
+        say(`The server's replay: ${b.run.label}, ${b.run.hits} hits from ${b.run.shots} shots.`, "g"); endBanner(b.run.label);
+      }
       say(`Sealed as ledger entry #${b.run.entry} (${b.run.hash.slice(0, 8)}).`, "b");
     })
     .catch(() => { P.seal = "NOT SEALED."; say("Couldn't reach the server, so this run wasn't sealed.", "e"); });
@@ -324,45 +295,28 @@ function showSealed(run) {
   endBanner(run.label);
 }
 
+// One frame: the page's own easing and timers, then as many of the engine's fixed ticks as the time that passed holds.
 function step(dt) {
-  P.t += dt; P.gx += (P.aim - P.gx) * Math.min(1, dt * 14); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
+  P.gx += (P.aim - P.gx) * Math.min(1, dt * 14); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
-  while (P.script.length && P.script[0][0] <= P.t) P.script.shift()[1]();
-  P.jit = P.streak >= 2 ? (Math.sin(P.t * 23) + Math.sin(P.t * 37)) * (Math.min(5, P.streak) - 1) * 0.35 : 0;
   if (P.done) return;
-
-  const active = enemies.filter((e) => e.state === "stepping" || e.state === "out");
-  const next = enemies.find((e) => e.state === "hidden" && e.s - P.s < 4.2);
-  if (next && P.phase !== "push") enemies.filter((e) => e.state === "hidden" && Math.abs(e.s - next.s) < 2).forEach((e) => e.state = "stepping");
-  const stopAt = Math.min(...enemies.filter((e) => e.state === "hidden").map((e) => e.s - 4.0), cor.end);
-  if (!active.length && !next) {
-    // walk to the centre of the next room where the rails turn, turn there on the spot, then walk on
-    const j = P.turns[0];
-    if (turning()) { P.tt += dt; if (P.tt >= TURN_TIME) { P.turns.shift(); P.tt = 0; P.s = j * C.S + 1e-6; } }
-    else P.s = Math.min(stopAt, j === undefined ? Infinity : j * C.S, P.s + 1.25 * dt);
+  for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
+    for (const ev of C.tick(P)) if (ev === "hurt") {
+      P.hurt = 0.25; say("ENEMY hit YOU", "e");
+      if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
+    }
+    while (P.script.length && P.script[0][0] <= P.tick) P.script.shift()[1]();
+    if (P.over) finish();
   }
-
-  for (const e of enemies) {
-    if (e.state === "stepping") { e.out = Math.min(1, e.out + dt / 0.45); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }
-    else if (e.state === "out") {
-      e.fire -= dt;
-      if (e.fire <= 0) {
-        e.fire = 1.7; P.hp--; P.hurt = 0.25; say("ENEMY hit YOU", "e");
-        if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
-        if (P.hp <= 0) { P.hp = 0; finish(); return; }
-      }
-    } else if (e.state === "dying") { e.dieT += dt; if (e.dieT > 0.5) e.state = "dead"; }
-  }
-  if (enemies.every((e) => e.state === "dead") && P.s >= cor.end - 0.01) finish();
+  P.jit = C.jit(P);
 }
 
 // the game runs and draws at 15 frames a second, like an old PC, whatever the screen's refresh rate
-const FPS = 15;
 let last = 0;
 function loop(ts) {
   requestAnimationFrame(loop);
-  if (last && ts - last < 1000 / FPS - 2) return;
+  if (last && ts - last < 1000 / C.FPS - 2) return;
   const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0); last = ts;
   if (!userOpen()) step(dt);
   render(); frame();
@@ -370,7 +324,7 @@ function loop(ts) {
 
 const view = $("view");
 // where the pointer is, in the view's half-size character cells
-const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(H - GUN.length - 2, (ev.clientY - r.top) / r.height * H)); };   // the crosshair stays above the gun
+const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(C.AIM_MAX_Y, (ev.clientY - r.top) / r.height * H)); };   // the crosshair stays above the gun
 // on the whole game, not just the view: a message box sits over the view and would swallow the pointer moving across it
 $("game").addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });

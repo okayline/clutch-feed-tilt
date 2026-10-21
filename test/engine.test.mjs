@@ -59,3 +59,47 @@ test("VERSION matches the newest CHANGELOG heading", () => {
   const m = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8").match(/^## v(\S+)/m);
   assert.equal(m[1], VERSION);
 });
+
+test("sin, cos and atan2 from + - * / and sqrt: within 1e-15 of Math's, exact at 0 and the quarter turns", () => {
+  for (let x = -10; x < 10; x += 0.0137) {
+    const [s, c] = C.sincos(x);
+    assert.ok(Math.abs(s - Math.sin(x)) < 1e-15 && Math.abs(c - Math.cos(x)) < 1e-15, `x = ${x}`);
+  }
+  for (let i = 0; i < 2000; i++) { const y = Math.sin(i * 1.3) * 5, x = Math.cos(i * 0.7) * 5; assert.ok(Math.abs(C.atan2(y, x) - Math.atan2(y, x)) < 2e-15); }
+  assert.deepEqual(C.sincos(0), [0, 1]);
+  assert.deepEqual([C.atan2(0, 1), C.atan2(1, 0), C.atan2(0, -1), C.atan2(-1, 0)], [0, Math.PI / 2, Math.PI, -Math.PI / 2]);
+});
+
+// Plays a run the way the page does (app.js step and shoot): shots land between ticks, at the tick the run is on.
+// It shoots at each enemy that's out, a little before it fires, and at a bare wall every 7th tick.
+function playLive(cor) {
+  const R = C.newRun(cor);
+  while (!R.over) {
+    if (R.tick % 7 === 3) C.fire(R, 10.5, 20);
+    for (const e of R.enemies) if (e.state === "out" && e.fire < 12) { const b = C.enemyBox(C.eyeOf(R), e); if (b) C.fire(R, b.sxc, (b.top + b.bot) / 2); }
+    C.tick(R);
+  }
+  return R;
+}
+
+test("replay: the same shots give the same run as playing it live, on every map tried", () => {
+  for (const [seed, d] of [[12345, "2026-10-21"], [1, "2026-10-14"], [3, "2026-10-19"], [3359765128, "2026-10-28"]]) {
+    const cor = C.corridor(seed, d), live = playLive(cor);
+    assert.equal(live.hits, 3, `seed ${seed}: all 3 enemies down`);
+    assert.ok(live.shots > live.hits, "and some misses");
+    const again = C.replay(C.corridor(seed, d), live.log.map((s) => s.slice(0, 3)));
+    assert.deepEqual([again.hp, again.shots, again.hits, again.tick, again.log], [live.hp, live.shots, live.hits, live.tick, live.log]);
+  }
+});
+
+test("replay: no shots and you die with 0 hits; shots that aren't a run are refused", () => {
+  const cor = C.corridor(12345, "2026-10-21"), R = C.replay(cor, []);
+  assert.deepEqual([R.hp, R.shots, R.hits, C.label(R)], [0, 0, 0, "FEED"]);
+  const end = R.tick;
+  assert.equal(C.replay(cor, [[5, 40, 10], [4, 40, 10]]), null, "out of order");
+  assert.equal(C.replay(cor, [[end + 1, 40, 10]]), null, "after the run ended");
+  assert.equal(C.replay(cor, [[5, 94, 10]]), null, "off the view");
+  assert.equal(C.replay(cor, [[5, 40, 30]]), null, "below the crosshair's reach");
+  assert.equal(C.replay(cor, [[5.5, 40, 10]]), null, "a tick is a whole number");
+  assert.equal(C.replay(cor, "nope"), null);
+});
