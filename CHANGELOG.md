@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.4.1 — "Swing"
+**Wed Oct 21, 2026 · 8:24 AM HST**
+
+- The gun stays at the bottom middle and swings toward your crosshair in a small arc, dipping as it swings out. Removed: the gun sliding all the way across the screen.
+
 ## v0.4 — "Sealed"
 **Wed Oct 21, 2026 · 8:11 AM HST**
 
