@@ -44,7 +44,7 @@ function build() {
   // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down.
   const s = squad, t0 = cor.t0;
   P = {
-    s: 0, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
+    s: 0, t: 0, hp: C.HP, shots: 0, hits: 0, streak: 0, calm: 0, aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0,
     left: C.ENEMIES, phase: "push", done: null, log: [], turns: C.turns(cor.path), tt: 0,
     script: [
       [t0, () => { s[0].k++; P.left--; say(`${s[0].n} got a kill`, "h"); }],
@@ -261,11 +261,13 @@ function shoot(col, row) {
     .filter((e) => e.sx && c >= e.sx[0] - 1 && c <= e.sx[1] && r >= e.sy[0] - 1 && r <= e.sy[1] && zbuf[Math.max(0, Math.min(W - 1, c))] > e.sd)
     .sort((a, b) => a.sd - b.sd)[0];
   if (hit) {
-    hit.state = "dying"; hit.dieT = 0; P.hits++; P.streak = 0; P.left--;
+    hit.state = "dying"; hit.dieT = 0; P.hits++; P.left--;
+    // tilt comes down by half on a hit, and all the way on the second hit in a row
+    P.calm++; P.streak = P.calm >= 2 ? 0 : Math.floor(Math.min(5, P.streak) / 2);
     say("YOU got a kill", "b");
     P.log.push([+P.t.toFixed(2), c, r, 1]);
   } else {
-    P.streak++;
+    P.streak++; P.calm = 0;
     P.log.push([+P.t.toFixed(2), c, r, 0]);
     if (P.streak === 3) say("you're tilting...", "g");
   }

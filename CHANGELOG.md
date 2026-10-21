@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.7 — "Cool Down"
+**Wed Oct 21, 2026 · 9:05 AM HST**
+
+- A hit takes your tilt down by half, and a second hit in a row takes it to nothing. Removed: one hit clearing all your tilt.
+
 ## v0.5.6 — "Slow Pan"
 **Wed Oct 21, 2026 · 9:04 AM HST**
 
