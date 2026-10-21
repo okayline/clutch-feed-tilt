@@ -85,11 +85,22 @@ function playLive(cor) {
 test("replay: the same shots give the same run as playing it live, on every map tried", () => {
   for (const [seed, d] of [[12345, "2026-10-21"], [1, "2026-10-14"], [3, "2026-10-19"], [3359765128, "2026-10-28"]]) {
     const cor = C.corridor(seed, d), live = playLive(cor);
-    assert.equal(live.hits, 3, `seed ${seed}: all 3 enemies down`);
+    assert.equal(live.kills, 3, `seed ${seed}: all 3 enemies down`);
     assert.ok(live.shots > live.hits, "and some misses");
     const again = C.replay(C.corridor(seed, d), live.log.map((s) => s.slice(0, 3)));
     assert.deepEqual([again.hp, again.shots, again.hits, again.tick, again.log], [live.hp, live.shots, live.hits, live.tick, live.log]);
   }
+});
+
+test("an enemy takes 3 body shots, or 1 headshot", () => {
+  const cor = C.corridor(12345, "2026-10-21"), R = C.newRun(cor);
+  while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
+  const [a, b] = R.enemies.filter((e) => e.state === "out" || e.state === "stepping"), eye = C.eyeOf(R), box = C.enemyBox(eye, a);
+  const legs = Math.round(box.bot - 1), mid = Math.round(box.sxc);   // the bottom row, the middle column: body, not head
+  assert.deepEqual([C.fire(R, mid, legs), C.fire(R, mid, legs), C.fire(R, mid, legs)], ["body", "body", "kill"]);
+  assert.equal(a.state, "dying");
+  if (b) { const bb = C.enemyBox(eye, b); assert.equal(C.fire(R, Math.round(bb.sxc), bb.top), "head"); assert.equal(b.state, "dying"); }
+  assert.deepEqual([R.hits, R.kills, R.heads], [b ? 4 : 3, b ? 2 : 1, b ? 1 : 0]);
 });
 
 test("replay: no shots and you die with 0 hits; shots that aren't a run are refused", () => {

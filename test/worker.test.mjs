@@ -159,7 +159,7 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
     for (const e of live.enemies) if (e.state === "out" && e.fire < 12) { const bx = C.enemyBox(C.eyeOf(live), e); if (bx) C.fire(live, bx.sxc, (bx.top + bx.bot) / 2); }
     C.tick(live);
   }
-  assert.equal(live.hits, 3);
+  assert.equal(live.kills, 3);
   const shots = live.log.map((s) => s.slice(0, 3));
   assert.equal((await call("ann", "POST", "/api/run", { day, shots: [shots[1], shots[0], ...shots.slice(2)] })).status, 400, "out of order");
   assert.equal((await call("ann", "POST", "/api/run", { day, shots: [...shots, [live.tick + 1, 40, 10]] })).status, 400, "a shot after the end");
@@ -171,9 +171,9 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
   assert.equal(a.status, 200);
   assert.deepEqual([a.run.hp, a.run.shots, a.run.hits, a.run.label], [live.hp, live.shots, live.hits, C.label(live)], "the same run as played");
   const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
-  const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: 3, label: C.label(live), log: live.log });
+  const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: live.hits, label: C.label(live), log: live.log });
   assert.equal(a.run.hash, sha(dayHash + "|" + rec1), "the first run chains from the day's entry");
-  assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash, detail: { day, label: C.label(live), hp: live.hp, hits: 3, shots: live.shots } }], "the registry got a checkpoint: the day and the run, the run's hash as the head, and the run's day, label, HP, hits and shots");
+  assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash, detail: { day, label: C.label(live), hp: live.hp, hits: live.hits, shots: live.shots } }], "the registry got a checkpoint: the day and the run, the run's hash as the head, and the run's day, label, HP, hits and shots");
   assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
   assert.equal((await call("ann", "POST", "/api/run", { day, shots })).status, 409, "one run a day");
 

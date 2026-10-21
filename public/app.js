@@ -111,7 +111,7 @@ function render() {
         const f = (y - top) / Math.max(1, sh);
         let c = "";
         if (e.state === "dying") c = "%";
-        else if (f < 0.22) c = Math.abs(u - 0.5) < 0.2 ? "@" : "";
+        else if (f < C.HEAD) c = Math.abs(u - 0.5) < C.HEAD_W ? "@" : "";
         else if (f < 0.6) c = Math.abs(u - 0.5) < 0.36 ? "#" : (f > 0.3 && f < 0.42 && u > 0.5) ? "=" : "";
         else c = (Math.abs(u - 0.3) < 0.11 || Math.abs(u - 0.7) < 0.11) ? "|" : "";
         if (c) put(x, y, c, "e");
@@ -251,7 +251,9 @@ function shoot(col, row) {
   if (P.done) return;
   P.flash = 0.08;
   const hit = C.fire(P, col, row);
-  if (hit) { P.left--; say("YOU got a kill", "b"); }
+  if (hit === "head") { P.left--; say("YOU got a HEADSHOT", "b"); }
+  else if (hit === "kill") { P.left--; say("YOU got a kill", "b"); }
+  else if (hit === "body") say("YOU hit ENEMY", "t");
   else if (hit === false && P.streak === 3) say("you're tilted", "g");
 }
 
@@ -272,7 +274,7 @@ function endBanner(kind) {
   const lines = {
     CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`1v3 ON ${P.hp} HP`, "b"], [`${P.hits} hits from ${P.shots} shots`, "t"]],
     TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["Won it, but the crosshair", "b"], ["was shaking the whole time.", "b"]],
-    FEED: [["", ""], [" FEED ", "big e"], ["", ""], ["Gave away free kills.", "b"], [`${P.left} ${P.left === 1 ? "enemy" : "enemies"} still up`, "t"]],
+    FEED: [["", ""], [" FEED ", "big e"], ["", ""], ["Gave away free kills.", "b"], P.left === null ? ["", ""] : [`${P.left} ${P.left === 1 ? "enemy" : "enemies"} still up`, "t"]],
   }[kind];
   lines.push(["", ""]);
   showBanner(lines, Infinity);
@@ -300,7 +302,7 @@ function seal() {
 // Today's run is already sealed: show it, and no new run until tomorrow's corridor.
 function showSealed(run) {
   build();
-  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, left: enemies.length - run.hits, script: [], phase: "clutch", done: run.label,
+  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, left: null, script: [], phase: "clutch", done: run.label,
                      seal: `TODAY'S RUN IS SEALED: ENTRY #${run.entry}` });
   enemies.forEach((e) => e.state = "dead"); squad.forEach((m) => m.dead = true);
   say(`Sealed as ledger entry #${run.entry} (${run.hash.slice(0, 8)}). Next corridor at midnight UTC.`, "b");

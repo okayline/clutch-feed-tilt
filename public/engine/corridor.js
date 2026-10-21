@@ -201,6 +201,8 @@ export const SPEED = 1.25 / FPS;      // tiles along the rails per tick
 const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ticks
 const FIRE_TICKS = 25;                // then fires every 25 ticks
 const DIE_TICKS = 8;
+export const ENEMY_HP = 3;            // body shots to drop an enemy; a headshot drops it in one
+export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
 export const MAX_TICKS = 9000;        // ten minutes: no run is longer
 export const MAX_SHOTS = 2000;
 
@@ -209,9 +211,9 @@ export const isOpen = (cor, x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h 
 
 export function newRun(cor) {
   return {
-    cor, tick: 0, s: 0, tt: 0, hp: HP, shots: 0, hits: 0, streak: 0, calm: 0, phase: "push", over: false, log: [],
+    cor, tick: 0, s: 0, tt: 0, hp: HP, shots: 0, hits: 0, heads: 0, kills: 0, streak: 0, calm: 0, phase: "push", over: false, log: [],
     turns: turns(cor.path), clutchTick: ticksOf(cor.t0 + 3.9),   // when the teammates have all fallen and it is 1 v 3
-    enemies: cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0, fire: Math.round(e.fire * FPS) })),
+    enemies: cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0, hp: ENEMY_HP, fire: Math.round(e.fire * FPS) })),
   };
 }
 
@@ -280,8 +282,12 @@ export function tick(R) {
   return ev;
 }
 
-// A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns true for a
-// hit, false for a miss, null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
+// Is (col, row) on an enemy's head? Its top HEAD of rows (and the row above, as for the body), its middle columns.
+export const onHead = (b, c, r) => r >= b.top - 1 && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
+
+// A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns false for a
+// miss, "body" for a body shot that leaves the enemy up, "kill" for the shot that drops it, "head" for a headshot (it
+// drops it), or null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
 export function fire(R, col, row) {
   if (R.over) return null;
   const q = (v) => Math.round(v * 100) / 100;
@@ -292,13 +298,18 @@ export function fire(R, col, row) {
   const hit = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }))
     .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
     .sort((a, b) => a.b.ry - b.b.ry)[0];
+  let got = false;
   if (hit) {
-    hit.e.state = "dying"; hit.e.dieT = 0; R.hits++;
+    const head = onHead(hit.b, c, r);
+    hit.e.hp = head ? 0 : hit.e.hp - 1; R.hits++;
+    if (head) R.heads++;
+    got = head ? "head" : hit.e.hp > 0 ? "body" : "kill";
+    if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }
     // tilt comes down by half on a hit, and all the way on the second hit in a row
     R.calm++; R.streak = R.calm >= 2 ? 0 : Math.floor(Math.min(5, R.streak) / 2);
   } else { R.streak++; R.calm = 0; }
   R.log.push([R.tick, col, row, hit ? 1 : 0]);
-  return !!hit;
+  return got;
 }
 
 // Play a run again from its shots: [[tick, col, row], ...] in order. Returns the finished run (hp, shots, hits, log: one
