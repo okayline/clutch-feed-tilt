@@ -86,11 +86,11 @@ function setup() {
 
 const seedOf = (day) => parseInt(createHash("sha256").update("cft:" + day).digest("hex").slice(0, 8), 16);
 
-test("the day's seed: the first 4 bytes of SHA-256('cft:' + day); /api/today gives the UTC day, its seed and your name", async () => {
+test("the day's seed: the first 4 bytes of SHA-256('cft:' + day); /api/today gives the UTC day, its seed, your name and your run", async () => {
   assert.equal(await daySeed("2026-10-21"), seedOf("2026-10-21"));
   const { call } = setup();
   const t = await call("ann", "GET", "/api/today");
-  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: seedOf("2027-01-01"), name: null });
+  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: seedOf("2027-01-01"), name: null, run: null });
   assert.equal((await call("ann", "GET", "/api/nope")).status, 404);
 });
 
@@ -136,7 +136,38 @@ test("the migrations build the same tables as schema.sql", () => {
   const fresh = new DatabaseSync(":memory:"), old = new DatabaseSync(":memory:");
   fresh.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));
   old.exec(readFileSync(new URL("../migrations/001_players.sql", import.meta.url), "utf8"));
+  old.exec(readFileSync(new URL("../migrations/002_ledger.sql", import.meta.url), "utf8"));
   const shape = (d) => d.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'index') AND name NOT LIKE 'sqlite_%' ORDER BY name").all()
     .map((r) => r.name + ":" + d.prepare(`SELECT group_concat(name || ' ' || type || ' ' || "notnull", ',') AS c FROM pragma_table_info('${r.name}')`).get().c);
   assert.deepEqual(shape(old), shape(fresh));
+});
+
+test("a run is sealed on the ledger: one a day, chained by SHA-256(prev + '|' + record), and only if it's possible", async () => {
+  const { env, call } = setup();
+  const sha = (t) => createHash("sha256").update(t).digest("hex");
+  const day = "2027-01-01";
+  // won on 2 HP: 3 hits from 4 shots
+  const log = [[6.1, 40, 15, 1], [6.9, 50, 16, 0], [8.2, 47, 15, 1], [12.4, 44, 14, 1]];
+  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 2, log })).status, 400, "the log has 3 hits, not 2");
+  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 3, log: log.slice(1) })).status, 400, "one log line per shot");
+  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 0, shots: 4, hits: 3, log })).status, 400, "dead with every enemy down");
+  assert.equal((await call("ann", "POST", "/api/run", { day: "2026-12-31", hp: 2, shots: 4, hits: 3, log })).status, 409, "yesterday's corridor");
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM ledger").get().n, 0, "nothing sealed so far");
+
+  const a = await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 3, log, label: "FEED" });
+  assert.equal(a.status, 200);
+  assert.equal(a.run.label, "CLUTCH", "the server names the run (4 <= 2.5 x 3), not the page");
+  const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
+  const rec1 = JSON.stringify({ day, player: annId, hp: 2, shots: 4, hits: 3, label: "CLUTCH", log });
+  assert.equal(a.run.hash, sha("0".repeat(64) + "|" + rec1));
+  assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
+  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 3, shots: 3, hits: 3, log: log.filter((s) => s[3]) })).status, 409, "one run a day");
+
+  // a second player, who died after 1 hit from 1 shot, chains from the first entry
+  const b = await call("bo", "POST", "/api/run", { day, hp: 0, shots: 1, hits: 1, log: [[7, 30, 15, 1]] });
+  const boId = env.DB.raw.prepare("SELECT MAX(id) AS id FROM players").get().id;
+  const rec2 = JSON.stringify({ day, player: boId, hp: 0, shots: 1, hits: 1, label: "FEED", log: [[7, 30, 15, 1]] });
+  assert.equal(b.run.hash, sha(a.run.hash + "|" + rec2));
+  assert.deepEqual(env.DB.raw.prepare("SELECT record FROM ledger ORDER BY id").all().map((r) => r.record), [rec1, rec2], "records hold ids, never names");
+  assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM runs").get().n, 2);
 });

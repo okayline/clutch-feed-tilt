@@ -173,7 +173,7 @@ function frame(message) {
     [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
   ];
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
-    : P.done ? [[" RUN OVER. ", "b"], ["RUNS AREN'T SAVED YET.", "t"]]
+    : P.done ? [[" RUN OVER. ", "b"], [P.seal || "", "t"]]
     : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
     : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
@@ -223,8 +223,12 @@ function shoot(col, row) {
 }
 
 function finish() {
-  const kind = C.label(P);
-  P.done = kind;
+  P.done = C.label(P);
+  endBanner(P.done);
+  seal();
+}
+
+function endBanner(kind) {
   const lines = {
     CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`1v3 ON ${P.hp} HP`, "b"], [`${P.hits} hits from ${P.shots} shots`, "t"]],
     TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["Won it, but the crosshair", "b"], ["was shaking the whole time.", "b"]],
@@ -232,6 +236,30 @@ function finish() {
   }[kind];
   lines.push(["", ""]);
   showBanner(lines, Infinity);
+}
+
+// Send the finished run to be sealed on the ledger (one a day; the server checks it and names it again).
+function seal() {
+  P.seal = "SEALING...";
+  const run = { day, hp: P.hp, shots: P.shots, hits: P.hits, log: P.log };
+  fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(run) })
+    .then(async (r) => [r.ok, await r.json()])
+    .then(([ok, b]) => {
+      if (!ok) { P.seal = "NOT SEALED."; say(b.error || "The server said no.", "e"); return; }
+      P.seal = `SEALED: LEDGER ENTRY #${b.run.entry}`;
+      say(`Sealed as ledger entry #${b.run.entry} (${b.run.hash.slice(0, 8)}).`, "b");
+    })
+    .catch(() => { P.seal = "NOT SEALED."; say("Couldn't reach the server, so this run wasn't sealed.", "e"); });
+}
+
+// Today's run is already sealed: show it, and no new run until tomorrow's corridor.
+function showSealed(run) {
+  build();
+  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, left: enemies.length - run.hits, script: [], phase: "clutch", done: run.label,
+                     seal: `TODAY'S RUN IS SEALED: ENTRY #${run.entry}` });
+  enemies.forEach((e) => e.state = "dead"); squad.forEach((m) => m.dead = true);
+  say(`Sealed as ledger entry #${run.entry} (${run.hash.slice(0, 8)}). Next corridor at midnight UTC.`, "b");
+  endBanner(run.label);
 }
 
 function step(dt) {
@@ -278,7 +306,6 @@ $("game").addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
 // a click on a message box closes it (and isn't a shot)
 $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
-$("again").addEventListener("click", () => { if (!P) return; build(); $("banner").hidden = true; bannerT = 0; });
 
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
@@ -290,6 +317,6 @@ addEventListener("keydown", (ev) => { if (!userOpen() && P && (ev.key === "u" ||
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
   day = t.day; SEED = t.seed; myName = t.name;
-  build();
+  if (t.run) showSealed(t.run); else build();
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));

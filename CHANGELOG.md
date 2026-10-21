@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.4 — "Sealed"
+**Wed Oct 21, 2026 · 8:11 AM HST**
+
+- One run a day, sealed on a hash-chain ledger the moment it ends. Come back the same day and you see your sealed run; a new corridor opens at midnight UTC. Removed: the RUN IT BACK button and unlimited unsaved runs.
+
 ## v0.3.8 — "Over the Gun"
 **Wed Oct 21, 2026 · 8:02 AM HST**
 
