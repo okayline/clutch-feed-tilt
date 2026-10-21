@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.5 — "Plus Corners"
+**Wed Oct 21, 2026 · 1:10 PM HST**
+
+- Every corner of a room on the minimap is a +, even next to a door. Removed: the - and | that 4Dungeon's minimap code draws on a corner beside a door.
+
 ## v0.9.4 — "Not Turned"
 **Wed Oct 21, 2026 · 1:09 PM HST**
 

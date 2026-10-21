@@ -211,7 +211,7 @@ function frame(message) {
 
 // 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms of the rails you've walked
 // through, the ways out of them, and an arrow for the way you face. Drawn by floor.js, 4Dungeon's own minimap code, from
-// the floor as it is (every door a gap, a locked one #). floor.js draws extra hallways out of room 0 (an irl-dungeon
+// the floor as it is (every door a gap, a locked one #), then a + put on every room corner. floor.js draws extra hallways out of room 0 (an irl-dungeon
 // rule), so it is handed the floor with every room number moved up by one.
 function minimap() {
   const k = Math.min(cor.route.length - 1, Math.round(P.s / C.S)), f = cor.floor, up = (j) => j + 1;
@@ -222,7 +222,14 @@ function minimap() {
   const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;
   const { dx, dy } = eye();
   const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N";
-  return FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing });
+  const rows = FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing }).map((r) => r.split(""));
+  // every corner of a room you've been in is a +, even next to a door (floor.js draws those as - or |)
+  const here = f.rooms[cor.route[k]];
+  for (const i of cor.route.slice(0, k + 1)) {
+    const row = 2 + (f.rooms[i].r - here.r) * 2, col = 13 + (f.rooms[i].c - here.c) * 4;
+    for (const y of [row - 1, row + 1]) for (const x of [col - 1, col + 3]) if (rows[y] && x >= 0 && x < rows[y].length) rows[y][x] = "+";
+  }
+  return rows.map((r) => r.join(""));
 }
 
 // ---- banner -------------------------------------------------------------------------------------------------
