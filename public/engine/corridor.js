@@ -12,7 +12,7 @@ export const HP = 3;
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
 export const TURN_STEPS = 6; // a 90 degree turn happens in 6 jumps of 15 degrees
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
-export const RUN_WINGS = 3; // the wings one day's run goes through, ending with the day's own wing
+export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's own wing
 
 // A small seeded random number generator (mulberry32): the same seed always gives the same numbers.
 export function rng(seed) {
@@ -48,7 +48,7 @@ export function level(day) {
 
 // The day's map. 4Dungeon's wing generator (engine/floor.js) builds that quarter's floor from its shared seed, and at
 // every offer of two locked doors the day's seed opens one, so the whole floor is one a 4Dungeon player could walk.
-// The run goes through RUN_WINGS wings ending with the day's own (or the first three, early in the quarter): the
+// The run goes through RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): the
 // rails run from the first room of the first of them to the room behind its last offer (the stairs, on the floor's
 // last wing), the shortest way through open doors, so they turn wherever the wings turn. Only those wings' rooms are
 // drawn. Rooms off the rails (dead ends) stay open to look into. Locked doors that weren't opened stay wall.
@@ -62,6 +62,7 @@ export function level(day) {
 //   squad       4 teammates: 3 ghosts (other players' runs; names stand in until runs are used) and BOT_FEEDER
 //   t0          when the first teammate event happens (seconds)
 //   end         how far along the rails the run ends (the last room's centre)
+//   shown       the room numbers drawn today: the run's wings and the goal
 export function corridor(seed, day) {
   const R = rng(seed), L = level(day);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
@@ -128,7 +129,7 @@ export function corridor(seed, day) {
   const names = [...NAMES];
   const take = () => names.splice(Math.floor(R() * names.length), 1)[0];
   const squad = [take(), take(), take()].map((n) => ({ n, tag: "ghost" })).concat([{ n: "BOT_FEEDER", tag: "bot" }]);
-  return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S };
+  return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S, shown: built };
 }
 
 // sin, cos and atan2 worked out with + - * / and Math.sqrt only, so every browser and the Worker get the same bits

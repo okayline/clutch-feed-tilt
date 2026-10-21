@@ -56,3 +56,13 @@ export async function dayEntry(db, day, level, t) {
 }
 
 export const isUnique = (e) => /UNIQUE/i.test(String(e && e.message));
+
+// Check rows (oldest first) form an unbroken chain from GENESIS: { ok: true } or { ok: false, at: id }.
+export async function verifyChain(rows) {
+  let p = GENESIS;
+  for (const r of rows) {
+    if (r.prev_hash !== p || (await sha256(p + "|" + r.record)) !== r.hash) return { ok: false, at: r.id };
+    p = r.hash;
+  }
+  return { ok: true };
+}

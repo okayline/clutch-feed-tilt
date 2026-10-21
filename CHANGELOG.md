@@ -4,6 +4,28 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9 — "Ledger"
+**Wed Oct 21, 2026 · 1:00 PM HST**
+
+- Every sealed run now sends a checkpoint to the shared registry, so CLUTCH FEED TILT's ledger is on the registry's public ledger page and under its hourly Bitcoin stamp. If the registry is away, the run is still sealed. Removed: nothing; before, this ledger was only on this game's own server.
+- A [L]EDGER button (or the L key) opens that page in a new tab.
+- The 3-misses message says "you're tilted". Removed: "you're tilting...".
+
+## v0.8.2 — "Walls"
+**Wed Oct 21, 2026 · 12:55 PM HST**
+
+- The minimap draws a wall wherever the 3D view has one: a door to a room that isn't in today's corridor is wall now. It still shows only the rooms you've been through, like 4Dungeon's. Removed: gaps in the minimap's walls that led nowhere.
+
+## v0.8.1 — "Up"
+**Wed Oct 21, 2026 · 12:47 PM HST**
+
+- The minimap is turned so the run always starts out going up: your arrow points up in the first room. Removed: the map's fixed north, which could start you pointing down, left or right.
+
+## v0.8 — "Shorter"
+**Wed Oct 21, 2026 · 12:47 PM HST**
+
+- The corridor is about a third shorter: it runs through two wings of the floor, ending with the day's own, so 3 to 5 rooms instead of 4 to 7. Removed: the third wing.
+
 ## v0.7 — "Replay"
 **Wed Oct 21, 2026 · 12:22 PM HST**
 
