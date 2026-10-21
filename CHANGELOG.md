@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.8.1 — "Up"
+**Wed Oct 21, 2026 · 12:47 PM HST**
+
+- The minimap is turned so the run always starts out going up: your arrow points up in the first room. Removed: the map's fixed north, which could start you pointing down, left or right.
+
 ## v0.8 — "Shorter"
 **Wed Oct 21, 2026 · 12:47 PM HST**
 
