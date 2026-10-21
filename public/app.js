@@ -1,7 +1,7 @@
 // The page: draws the frame and the view, runs the fight, and names the run. The rules are in engine/corridor.js.
 import * as C from "./engine/corridor.js";
 import { VERSION } from "./engine/version.js";
-import { setupAccount } from "./account.js";
+import { setupAccount, openPlayer, closePlayer, isOpen as userOpen } from "./account.js";
 
 const W = 94, H = 34;                // the view window at half-size characters: 47 x 17 cells of the frame, doubled
 const FW = 80, PW = 30, VWc = 47;
@@ -126,11 +126,17 @@ function render() {
   $("screen").innerHTML = out;
 }
 
+let frameHTML = "";
+const setFrame = (h) => { if (h !== frameHTML) $("frame").innerHTML = frameHTML = h; };
+
 // ---- the frame and panel ------------------------------------------------------------------------------------
 const pad = (s, n) => s.length >= n ? s.slice(0, n) : s + " ".repeat(n - s.length);
 function seg(parts, n) {   // [[text, cls], ...] padded to n visible columns
   let len = 0, html = "";
-  for (const [t, c] of parts) { const tt = t.slice(0, n - len); len += tt.length; html += c ? `<span class="${c}">${esc(tt)}</span>` : esc(tt); }
+  for (const [t, c, k] of parts) {
+    const tt = t.slice(0, n - len); len += tt.length;
+    html += c || k ? `<span${c ? ` class="${c}"` : ""}${k ? ` data-k="${k}"` : ""}>${esc(tt)}</span>` : esc(tt);
+  }
   return html + " ".repeat(Math.max(0, n - len));
 }
 function frame(message) {
@@ -142,7 +148,7 @@ function frame(message) {
     const L = [top, "|" + head + "|", mid];
     for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + " ".repeat(PW) + "|");
     L.push(mid, "|" + seg([[" " + message, "t"]], FW - 2) + "|", top);
-    $("frame").innerHTML = L.join("\n");
+    setFrame(L.join("\n"));
     return;
   }
   const rule = " " + "-".repeat(PW - 2) + " ";
@@ -163,13 +169,16 @@ function frame(message) {
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
     [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
   ];
-  const status = P.done ? [[" RUN OVER. ", "b"], ["RUN IT BACK BELOW. RUNS AREN'T SAVED YET.", "t"]]
-    : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP THE VIEW TO SHOOT", "d"]]
-    : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP THE VIEW TO SHOOT", "d"]];
+  const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
+    : P.done ? [[" RUN OVER. ", "b"], ["RUNS AREN'T SAVED YET.", "t"]]
+    : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
+    : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
+  const used = status.reduce((n, [t]) => n + t.length, 0);
+  status.push([" ".repeat(Math.max(1, FW - 2 - used - 12)), ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
   L.push(mid, "|" + seg(status, FW - 2) + "|", top);
-  $("frame").innerHTML = L.join("\n");
+  setFrame(L.join("\n"));
 }
 
 // ---- banner -------------------------------------------------------------------------------------------------
@@ -245,7 +254,8 @@ function step(dt) {
 let last = 0;
 function loop(ts) {
   const dt = Math.min(0.05, last ? (ts - last) / 1000 : 0); last = ts;
-  step(dt); render(); frame();
+  if (!userOpen()) step(dt);
+  render(); frame();
   requestAnimationFrame(loop);
 }
 
@@ -266,6 +276,9 @@ addEventListener("resize", fit);
 fit();
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
+// pointerdown, not click: the frame is redrawn every animation frame, so the span pressed may be gone by the release
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); });
+addEventListener("keydown", (ev) => { if (!userOpen() && P && (ev.key === "u" || ev.key === "U") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); openPlayer(); } });
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");
