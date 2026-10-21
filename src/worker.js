@@ -2,6 +2,7 @@
 //
 //   GET  /api/today                    { day, seed, name }: today's date in UTC (from the server's clock, so a wrong
 //                                      phone clock can't pick another day), its seed, and your name if you have a player
+//   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
 //   POST /api/load  {code}             load the player a save code belongs to on this device (log in)
@@ -41,6 +42,7 @@ class Oops extends Error {
 
 const ROUTES = {
   "GET /api/today": today,
+  "POST /api/name": setName,
   "GET /api/account": account,
   "POST /api/codes": codes,
   "POST /api/load": loadCode,
@@ -135,6 +137,13 @@ async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
   return json({ day, seed: await daySeed(day), name: player ? player.name : null });
+}
+
+// Reroll: a new random name nobody has. Only for a player that already exists (looking never makes one).
+async function setName(req, env) {
+  const player = await mustPlayer(req, env);
+  const p = await giveName(env, player, { reroll: true });
+  return json({ name: p.name });
 }
 
 // ---------- save codes and passkeys (kept by the shared Accounts service in dungeon-items) ----------

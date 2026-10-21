@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3 — "Gamer Tags"
+**Wed Oct 21, 2026 · 7:45 AM HST**
+
+- **Names are FPS gamer tags now,** like SweatyNoScope or TiltedPanda. New players get one of these.
+- **[REROLL NAME]** in the USER panel gives you a new random one any time. Your name shows in the squad panel at once.
+- Names you already have stay until you reroll. Removed: the two-word names (Quiet Heron style) for new players.
+
 ## v0.2.1 — "Version Tag"
 **Wed Oct 21, 2026 · 7:40 AM HST**
 

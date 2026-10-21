@@ -114,6 +114,24 @@ test("save codes and passkeys: load your player on another device, log out only 
   assert.equal((await call("bo", "POST", "/api/logout")).status, 400);
 });
 
+test("names are FPS gamer tags (letters only, at most 16); reroll gives a new one and keeps it unique", async () => {
+  const { env, call } = setup();
+  assert.equal((await call("ann", "POST", "/api/name")).status, 401, "no player yet: nothing to reroll");
+  await call("ann", "POST", "/api/codes", { action: "new" });
+  const first = (await call("ann", "GET", "/api/today")).name;
+  assert.match(first, /^[A-Z][A-Za-z]{5,15}$/);
+  const seen = new Set([first]);
+  for (let i = 0; i < 5; i++) {
+    const r = await call("ann", "POST", "/api/name");
+    assert.equal(r.status, 200);
+    assert.match(r.name, /^[A-Z][A-Za-z]{5,15}$/);
+    assert.equal((await call("ann", "GET", "/api/today")).name, r.name, "the new name is the one kept");
+    seen.add(r.name);
+  }
+  const rows = env.DB.raw.prepare("SELECT name, name_key FROM players").all();
+  assert.deepEqual(rows.map((r) => r.name_key), [rows[0].name.toLowerCase()], "one player, its name_key follows");
+});
+
 test("the migrations build the same tables as schema.sql", () => {
   const fresh = new DatabaseSync(":memory:"), old = new DatabaseSync(":memory:");
   fresh.exec(readFileSync(new URL("../schema.sql", import.meta.url), "utf8"));

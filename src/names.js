@@ -1,19 +1,17 @@
-// Random player names: two words, like Dawn Baton, irl-dungeon and scoundrel.exe (copied from scoundrel.exe
-// src/names.js). Every player gets one when they're made or next seen: nobody is nameless.
-const ADJECTIVES = [
-  "Quiet", "Amber", "Early", "Gentle", "Bright", "Sleepy", "Golden", "Misty", "Rosy", "Brisk",
-  "Hushed", "Warm", "Pale", "Slow", "Steady", "Wandering", "Soft", "Silver", "Crisp", "Drowsy",
-  "Humble", "Eager", "Lucky", "Patient", "Little", "Cheerful", "Faint", "Glowing", "Distant", "Tender",
-  "Rested", "Windy", "Dewy", "Calm", "Merry", "Shy", "Nimble", "Sunny", "Mellow", "Dappled",
+// Random player names, FPS gamer tags like SweatyNoScope (ryan, Oct 21: "fps gamer names"). Every player gets one when
+// they're made or next seen: nobody is nameless, and they can reroll it any time (POST /api/name).
+const PREFIXES = [
+  "Sweaty", "Tilted", "Camping", "Reloading", "Laggy", "Headshot", "NoScope", "Quick", "Silent", "Crispy",
+  "Toxic", "Salty", "Smurf", "Ratty", "Turbo", "Rusty", "Hardscope", "Wallhack", "Flashbang", "Fragging",
+  "Spawn", "Stealthy", "Rapid", "Ghost", "Lone", "Frosty", "Spicy", "Dank", "Big", "Tiny",
 ];
 const NOUNS = [
-  "Heron", "Lantern", "Sparrow", "Kettle", "Meadow", "Thistle", "Harbor", "Wren", "Compass", "Fern",
-  "Moth", "Orchard", "Ferry", "Pebble", "Robin", "Willow", "Teapot", "Comet", "Lark", "Cedar",
-  "Beacon", "Marmot", "Otter", "Clover", "Ember", "Finch", "Tide", "Bramble", "Lamp", "Poppy",
-  "Swallow", "Sundial", "Quill", "Hedgehog", "Trellis", "Rooster", "Weathervane", "Kingfisher", "Pigeon", "Lighthouse",
+  "Sniper", "Camper", "Rusher", "Fragger", "Medic", "Noob", "Ninja", "Wolf", "Viper", "Reaper",
+  "Hawk", "Tank", "Cowboy", "Panda", "Goose", "Waffle", "Potato", "Toaster", "Pixel", "Bunny",
+  "Gremlin", "Raccoon", "Wizard", "Pickle", "Goblin", "Turtle", "Sheriff", "Pilot", "Bandit", "Yeti",
 ];
 // names are at most 16 characters, so only the pairs that fit
-const PAIRS = ADJECTIVES.flatMap((a) => NOUNS.map((n) => `${a} ${n}`)).filter((s) => s.length <= 16);
+const PAIRS = PREFIXES.flatMap((a) => NOUNS.map((n) => `${a}${n}`)).filter((s) => s.length <= 16);
 
 // Give this player a random name nobody has, if they have none (or a different one, with reroll). Returns the player
 // with its name (unchanged only if every try hit a taken name, which won't happen until most of the pairs are used).

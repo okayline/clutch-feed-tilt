@@ -77,7 +77,7 @@ function paint() {
   const rule = document.createElement("div"); rule.textContent = " " + "-".repeat(45); head.appendChild(rule);
   const m = document.createElement("div"); m.className = "msg g"; m.textContent = msg ? " " + msg : ""; m.hidden = !msg; head.appendChild(m);
   if (!a) { line(" Loading...", "d"); return; }
-  if (a.name) line(` You're ${a.name}.`);
+  if (a.name) row(` You're ${a.name}.  `, btn("REROLL NAME", "name"));
   if (newCode) {
     line(" YOUR NEW SAVE CODE (shown once)", "g");
     line("   " + newCode, "g code");
@@ -119,6 +119,7 @@ async function act(a) {
   busy = true;
   try {
     if (a === "code") { newCode = (await api("POST", "codes", { action: "new" })).code; copied = false; msg = ""; await refresh(); }
+    else if (a === "name") { const d = await api("POST", "name", {}); msg = `You're ${d.name} now.`; await refresh(); }
     else if (a === "done") { newCode = ""; copied = false; msg = ""; }
     else if (a === "copycode") {
       try { await navigator.clipboard.writeText(newCode); copied = true; msg = "Copied. Keep it somewhere safe."; }
