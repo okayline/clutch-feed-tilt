@@ -131,6 +131,29 @@ export function corridor(seed, day) {
   return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S };
 }
 
+// sin, cos and atan2 worked out with + - * / and Math.sqrt only, so every browser and the Worker get the same bits
+// (Math.sin, Math.cos and Math.atan2 may differ in the last digit from one JavaScript engine to another, and a hit
+// can turn on that last digit).
+const HALF_PI = Math.PI / 2;
+export function sincos(x) {   // [sin x, cos x]
+  const k = Math.round(x / HALF_PI), r = x - k * HALF_PI, r2 = r * r;
+  const sn = r * (1 + r2 * (-1 / 6 + r2 * (1 / 120 + r2 * (-1 / 5040 + r2 * (1 / 362880 + r2 * (-1 / 39916800 + r2 * (1 / 6227020800 + r2 * (-1 / 1307674368000))))))));
+  const cs = 1 + r2 * (-1 / 2 + r2 * (1 / 24 + r2 * (-1 / 720 + r2 * (1 / 40320 + r2 * (-1 / 3628800 + r2 * (1 / 479001600 + r2 * (-1 / 87178291200 + r2 / 20922789888000)))))));
+  const q = ((k % 4) + 4) % 4;
+  return q === 0 ? [sn + 0, cs + 0] : q === 1 ? [cs + 0, -sn + 0] : q === 2 ? [-sn + 0, -cs + 0] : [-cs + 0, sn + 0];
+}
+function atan(z) {   // |z| <= 1: halve the angle twice, then the series
+  for (let i = 0; i < 2; i++) z = z / (1 + Math.sqrt(1 + z * z));
+  const z2 = z * z; let p = 0;
+  for (let n = 23; n >= 1; n -= 2) p = 1 / n - z2 * p;
+  return 4 * z * p;
+}
+export function atan2(y, x) {
+  if (x === 0 && y === 0) return 0;
+  if (Math.abs(y) <= Math.abs(x)) { const a = atan(y / x); return x > 0 ? a : y >= 0 ? a + Math.PI : a - Math.PI; }
+  const a = atan(x / y); return y > 0 ? HALF_PI - a : -HALF_PI - a;
+}
+
 // Where you are on the rails, s tiles along them: { x, y } on the tile map and the way you face, { dx, dy }. You face
 // along the rails. At a room where they turn you stop on its centre and turn on the spot: e (0 to 1) is how far round
 // you are, in TURN_STEPS jumps of 15 degrees (a stutter, like a low frame rate). Standing on the centre you still face
@@ -139,7 +162,8 @@ export function along(path, s, e = 0) {
   const n = path.length, k = Math.max(0, Math.min(n - 2, Math.ceil(s / S) - 1)), t = Math.max(0, Math.min(1, s / S - k));
   const x = path[k].x + (path[k + 1].x - path[k].x) * t, y = path[k].y + (path[k + 1].y - path[k].y) * t;
   const a = ang(path, k) + (t === 1 && k + 1 <= n - 2 ? turnAt(path, k + 1) * Math.floor(e * TURN_STEPS) / TURN_STEPS : 0);
-  return { x, y, dx: Math.cos(a), dy: Math.sin(a) };
+  const [dy, dx] = sincos(a);
+  return { x, y, dx, dy };
 }
 
 // The rooms on the route where the rails turn: their indexes in path, in order.
@@ -149,7 +173,7 @@ export function turns(path) {
   return out;
 }
 
-const ang = (path, j) => Math.atan2(path[j + 1].y - path[j].y, path[j + 1].x - path[j].x);
+const ang = (path, j) => atan2(path[j + 1].y - path[j].y, path[j + 1].x - path[j].x);
 function turnAt(path, j) {
   let turn = ang(path, j) - ang(path, j - 1);
   if (turn > Math.PI) turn -= 2 * Math.PI; if (turn < -Math.PI) turn += 2 * Math.PI;
@@ -162,4 +186,138 @@ export function label({ hp, shots, hits }) {
   if (hp <= 0) return "FEED";
   if (shots > 2.5 * hits) return "TILT";
   return "CLUTCH";
+}
+
+// ---- a run, one tick at a time ------------------------------------------------------------------------------------
+// The whole fight is played in fixed ticks, FPS a second, with no clock and no random numbers: the same corridor and
+// the same shots (each at a tick number) always end the same way. The page plays it live; the Worker plays it again
+// from the shots the page sends (replay) and seals what it got, not what the page says it got.
+export const FPS = 15;
+export const W = 94, H = 34;          // the view window in half-size characters
+export const AIM_MAX_Y = H - 13;      // the lowest row the crosshair goes (the gun is 11 rows and takes the bottom)
+export const COL = (15 * Math.PI / 180) / 21;   // how much further round each column of the view looks: 15 degrees is 21 columns
+export const TURN_TICKS = 36;         // a turn on the spot: 2.4 seconds
+export const SPEED = 1.25 / FPS;      // tiles along the rails per tick
+const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ticks
+const FIRE_TICKS = 25;                // then fires every 25 ticks
+const DIE_TICKS = 8;
+export const MAX_TICKS = 9000;        // ten minutes: no run is longer
+export const MAX_SHOTS = 2000;
+
+export const ticksOf = (secs) => Math.ceil(secs * FPS - 1e-9);
+export const isOpen = (cor, x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && cor.open[y][x];
+
+export function newRun(cor) {
+  return {
+    cor, tick: 0, s: 0, tt: 0, hp: HP, shots: 0, hits: 0, streak: 0, calm: 0, phase: "push", over: false, log: [],
+    turns: turns(cor.path), clutchTick: ticksOf(cor.t0 + 3.9),   // when the teammates have all fallen and it is 1 v 3
+    enemies: cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0, fire: Math.round(e.fire * FPS) })),
+  };
+}
+
+export const turning = (R) => R.turns.length > 0 && R.s >= R.turns[0] * S;
+export const eyeOf = (R) => along(R.cor.path, R.s, turning(R) ? R.tt / TURN_TICKS : 0);
+
+// The crosshair shakes while you tilt: two zig-zags, a few ticks long each, as wide as the tilt.
+const tri = (n, p) => Math.abs(((n % p) / p) * 4 - 2) - 1;
+export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (Math.min(5, R.streak) - 1) * 0.35 : 0;
+
+// Column x of the view, cast from the eye to the first wall: { d: how far, side, mx, my (the wall block), sx, sy, rdx, rdy }.
+export function cast(cor, eye, x) {
+  const { x: px, y: py, dx: fx, dy: fy } = eye, th = atan2(fy, fx) + (x + 0.5 - W / 2) * COL, [rdy, rdx] = sincos(th);
+  let mx = Math.floor(px), my = Math.floor(py);
+  const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
+  const sx = rdx < 0 ? -1 : 1, sy = rdy < 0 ? -1 : 1;
+  let sdx = rdx < 0 ? (px - mx) * ddx : (mx + 1 - px) * ddx, sdy = rdy < 0 ? (py - my) * ddy : (my + 1 - py) * ddy, side = 0;
+  for (let i = 0; i < 80; i++) {
+    if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
+    if (!isOpen(cor, mx, my)) break;
+  }
+  return { d: side === 0 ? sdx - ddx : sdy - ddy, side, mx, my, sx, sy, rdx, rdy };
+}
+
+// Where an enemy is on the view: { sxc, ry (how far), l, rr (columns), top, bot (rows), sh }, or null if it can't be seen.
+export function enemyBox(eye, e) {
+  const { x: px, y: py, dx: fx, dy: fy } = eye, ry = Math.sqrt((e.x - px) * (e.x - px) + (e.y - py) * (e.y - py));
+  if (ry < 0.3) return null;
+  let da = atan2(e.y - py, e.x - px) - atan2(fy, fx); da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
+  if (Math.abs(da) > Math.PI / 2) return null;
+  const sxc = W / 2 + da / COL, sw = 0.5 / ry / COL;
+  let sh = H * 0.8 / ry;
+  if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / DIE_TICKS);
+  if (e.state === "dead" || sh < 1) return null;
+  const bot = Math.round(H / 2 + H / (2 * ry)), top = Math.round(bot - sh);
+  return { sxc, ry, sh, l: Math.round(sxc - sw / 2), rr: Math.round(sxc + sw / 2), top, bot };
+}
+
+// One tick. Returns the things that happened that the page shows: "hurt" when an enemy hit you.
+export function tick(R) {
+  const ev = [];
+  if (R.over) return ev;
+  const E = R.enemies, cor = R.cor;
+  R.tick++;
+  if (R.tick >= R.clutchTick) R.phase = "clutch";
+  const active = E.filter((e) => e.state === "stepping" || e.state === "out");
+  const next = E.find((e) => e.state === "hidden" && e.s - R.s < 4.2);
+  if (next && R.phase !== "push") E.filter((e) => e.state === "hidden" && Math.abs(e.s - next.s) < 2).forEach((e) => e.state = "stepping");
+  const stopAt = Math.min(...E.filter((e) => e.state === "hidden").map((e) => e.s - 4.0), cor.end);
+  if (!active.length && !next) {
+    // walk to the centre of the next room where the rails turn, turn there on the spot, then walk on
+    const j = R.turns[0];
+    if (turning(R)) { R.tt++; if (R.tt >= TURN_TICKS) { R.turns.shift(); R.tt = 0; R.s = j * S + 1e-6; } }
+    else R.s = Math.min(stopAt, j === undefined ? Infinity : j * S, R.s + SPEED);
+  }
+  for (const e of E) {
+    if (e.state === "stepping") { e.out = Math.min(1, e.out + 1 / STEP_TICKS); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }
+    else if (e.state === "out") {
+      if (--e.fire <= 0) {
+        e.fire = FIRE_TICKS; R.hp--; ev.push("hurt");
+        if (R.hp <= 0) { R.hp = 0; R.over = true; return ev; }
+      }
+    } else if (e.state === "dying") { if (++e.dieT >= DIE_TICKS) e.state = "dead"; }
+  }
+  if (E.every((e) => e.state === "dead") && R.s >= cor.end - 0.01) R.over = true;
+  return ev;
+}
+
+// A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns true for a
+// hit, false for a miss, null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
+export function fire(R, col, row) {
+  if (R.over) return null;
+  const q = (v) => Math.round(v * 100) / 100;
+  col = q(col); row = q(row);
+  R.shots++;
+  const c = Math.round(col + jit(R)), r = Math.round(row), eye = eyeOf(R);
+  const wall = cast(R.cor, eye, Math.max(0, Math.min(W - 1, c))).d;
+  const hit = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }))
+    .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
+    .sort((a, b) => a.b.ry - b.b.ry)[0];
+  if (hit) {
+    hit.e.state = "dying"; hit.e.dieT = 0; R.hits++;
+    // tilt comes down by half on a hit, and all the way on the second hit in a row
+    R.calm++; R.streak = R.calm >= 2 ? 0 : Math.floor(Math.min(5, R.streak) / 2);
+  } else { R.streak++; R.calm = 0; }
+  R.log.push([R.tick, col, row, hit ? 1 : 0]);
+  return !!hit;
+}
+
+// Play a run again from its shots: [[tick, col, row], ...] in order. Returns the finished run (hp, shots, hits, log: one
+// [tick, col, row, hit] per shot), or null if the shots are not a run: malformed, out of order, aimed off the view, or the
+// run did not end.
+export function replay(cor, shots) {
+  if (!Array.isArray(shots) || shots.length > MAX_SHOTS) return null;
+  let last = 0;
+  for (const s of shots) {
+    if (!Array.isArray(s) || s.length !== 3 || !Number.isInteger(s[0]) || s[0] < last || s[0] > MAX_TICKS) return null;
+    if (!(Number.isFinite(s[1]) && Number.isFinite(s[2]) && s[1] >= 0 && s[1] <= W - 1 && s[2] >= 1 && s[2] <= AIM_MAX_Y)) return null;
+    last = s[0];
+  }
+  const R = newRun(cor);
+  for (const [t, col, row] of shots) {
+    while (!R.over && R.tick < t) tick(R);
+    if (R.over) return null;   // a shot after the run ended
+    fire(R, col, row);
+  }
+  while (!R.over && R.tick < MAX_TICKS) tick(R);
+  return R.over ? R : null;
 }

@@ -3,7 +3,8 @@
 //   GET  /api/today                    { day, seed, name, run }: today's date in UTC (from the server's clock, so a wrong
 //                                      phone clock can't pick another day), its seed, your name if you have a player, and
 //                                      your run today if you've sealed one
-//   POST /api/run {day, hp, shots, hits, log}   seal today's run on the ledger (one per player per day)
+//   POST /api/run {day, shots}         seal today's run on the ledger (one per player per day): the server plays it
+//                                      again from its shots, [[tick, col, row], ...], and seals what it got
 //   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
@@ -154,25 +155,17 @@ async function runOf(env, playerId, day) {
      WHERE r.player_id = ? AND r.day = ?`).bind(playerId, day).first();
 }
 
-const MAX_SHOTS = 2000;   // every click is a shot, walking or not
-const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
-
-// Seal today's run. The run is played in the browser and the server can't replay it, so it only checks the run is
-// possible: today's corridor, HP 0 to 3, one hit per enemy you face (all of them if you're alive, fewer if you died),
-// and a shot log with one [seconds, column, row, hit] per shot that adds up to the hits. The label is worked out here.
-// The run and its ledger entry are one D1 batch.
+// Seal today's run. The page sends only its shots, each at a tick of the fight; the run is played again here from
+// today's corridor and those shots (corridor.js replay, the same code the page plays), and what that gives is sealed:
+// HP, shots, hits and the label, with the shot log ([tick, col, row, hit] per shot). Shots that aren't a finished run
+// (out of order, off the view, after the end, or a run that never ends) are refused. The run and its ledger entry are
+// one D1 batch.
 async function saveRun(req, env) {
   const b = await body(req), day = utcDay();
   if (b.day !== day) throw new Oops("That day's corridor is over. This run can't be sealed.", 409);
-  const foes = C.corridor(await daySeed(env, day), day).enemies.length;
-  const { hp, shots, hits, log } = b;
-  const possible = int(hp, 0, C.HP) && int(shots, 0, MAX_SHOTS) && int(hits, 0, foes) && hits <= shots
-    && (hp > 0 ? hits === foes : hits < foes)
-    && Array.isArray(log) && log.length === shots
-    && log.every((s, i) => Array.isArray(s) && s.length === 4 && s.slice(0, 3).every(Number.isFinite) && (s[3] === 0 || s[3] === 1)
-                           && s[0] >= 0 && (i === 0 || s[0] >= log[i - 1][0]))
-    && log.filter((s) => s[3] === 1).length === hits;
-  if (!possible) throw new Oops("That run doesn't add up. It wasn't sealed.");
+  const R = C.replay(C.corridor(await daySeed(env, day), day), b.shots);
+  if (!R) throw new Oops("That run doesn't add up. It wasn't sealed.");
+  const { hp, shots, hits, log } = R;
   const { player, cookie } = await needPlayer(req, env);
   const label = C.label({ hp, shots, hits });
   const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, log });

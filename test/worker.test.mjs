@@ -6,7 +6,8 @@ import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import worker, { setClock } from "../src/worker.js";
-import { level } from "../public/engine/corridor.js";
+import * as C from "../public/engine/corridor.js";
+const { level } = C;
 
 // a tiny D1 lookalike (copied from scoundrel.exe test/worker.test.mjs)
 function fakeD1() {
@@ -148,30 +149,38 @@ test("the migrations build the same tables as schema.sql", () => {
   assert.deepEqual(shape(old), shape(fresh));
 });
 
-test("a run is sealed on the ledger: one a day, chained by SHA-256(prev + '|' + record), and only if it's possible", async () => {
+test("a run is sealed on the ledger: the server plays it again from its shots, seals what it got, one a day, chained by SHA-256(prev + '|' + record)", async () => {
   const { env, call } = setup();
-  const day = "2027-01-01", dayHash = sha("0".repeat(64) + "|" + dayRec(day));
-  // won on 2 HP: 3 hits from 4 shots
-  const log = [[6.1, 40, 15, 1], [6.9, 50, 16, 0], [8.2, 47, 15, 1], [12.4, 44, 14, 1]];
-  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 2, log })).status, 400, "the log has 3 hits, not 2");
-  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 3, log: log.slice(1) })).status, 400, "one log line per shot");
-  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 0, shots: 4, hits: 3, log })).status, 400, "dead with every enemy down");
-  assert.equal((await call("ann", "POST", "/api/run", { day: "2026-12-31", hp: 2, shots: 4, hits: 3, log })).status, 409, "yesterday's corridor");
+  const day = "2027-01-01", dayHash = sha("0".repeat(64) + "|" + dayRec(day)), seed = parseInt(dayHash.slice(0, 8), 16);
+  // played the way the page plays it (as in engine.test.mjs): a shot at each enemy once it's out, and some misses
+  const live = C.newRun(C.corridor(seed, day));
+  while (!live.over) {
+    if (live.tick % 9 === 2) C.fire(live, 12.25, 18.5);
+    for (const e of live.enemies) if (e.state === "out" && e.fire < 12) { const bx = C.enemyBox(C.eyeOf(live), e); if (bx) C.fire(live, bx.sxc, (bx.top + bx.bot) / 2); }
+    C.tick(live);
+  }
+  assert.equal(live.hits, 3);
+  const shots = live.log.map((s) => s.slice(0, 3));
+  assert.equal((await call("ann", "POST", "/api/run", { day, shots: [shots[1], shots[0], ...shots.slice(2)] })).status, 400, "out of order");
+  assert.equal((await call("ann", "POST", "/api/run", { day, shots: [...shots, [live.tick + 1, 40, 10]] })).status, 400, "a shot after the end");
+  assert.equal((await call("ann", "POST", "/api/run", { day: "2026-12-31", shots })).status, 409, "yesterday's corridor");
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM ledger WHERE kind = 'run'").get().n, 0, "no run sealed so far");
 
-  const a = await call("ann", "POST", "/api/run", { day, hp: 2, shots: 4, hits: 3, log, label: "FEED" });
+  // what the page says it got is ignored: the server's replay decides
+  const a = await call("ann", "POST", "/api/run", { day, shots, hp: 1, hits: 0, label: "FEED" });
   assert.equal(a.status, 200);
-  assert.equal(a.run.label, "CLUTCH", "the server names the run (4 <= 2.5 x 3), not the page");
+  assert.deepEqual([a.run.hp, a.run.shots, a.run.hits, a.run.label], [live.hp, live.shots, live.hits, C.label(live)], "the same run as played");
   const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
-  const rec1 = JSON.stringify({ day, player: annId, hp: 2, shots: 4, hits: 3, label: "CLUTCH", log });
+  const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: 3, label: C.label(live), log: live.log });
   assert.equal(a.run.hash, sha(dayHash + "|" + rec1), "the first run chains from the day's entry");
   assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
-  assert.equal((await call("ann", "POST", "/api/run", { day, hp: 3, shots: 3, hits: 3, log: log.filter((s) => s[3]) })).status, 409, "one run a day");
+  assert.equal((await call("ann", "POST", "/api/run", { day, shots })).status, 409, "one run a day");
 
-  // a second player, who died after 1 hit from 1 shot, chains from the first entry
-  const b = await call("bo", "POST", "/api/run", { day, hp: 0, shots: 1, hits: 1, log: [[7, 30, 15, 1]] });
+  // a second player who never shot: the enemies win, 3 HP gone, 0 hits
+  const b = await call("bo", "POST", "/api/run", { day, shots: [], hp: 3, hits: 3 });
+  assert.deepEqual([b.run.hp, b.run.shots, b.run.hits, b.run.label], [0, 0, 0, "FEED"]);
   const boId = env.DB.raw.prepare("SELECT MAX(id) AS id FROM players").get().id;
-  const rec2 = JSON.stringify({ day, player: boId, hp: 0, shots: 1, hits: 1, label: "FEED", log: [[7, 30, 15, 1]] });
+  const rec2 = JSON.stringify({ day, player: boId, hp: 0, shots: 0, hits: 0, label: "FEED", log: [] });
   assert.equal(b.run.hash, sha(a.run.hash + "|" + rec2));
   assert.deepEqual(env.DB.raw.prepare("SELECT record FROM ledger ORDER BY id").all().map((r) => r.record), [dayRec(day), rec1, rec2], "records hold ids, never names");
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM runs").get().n, 2);
