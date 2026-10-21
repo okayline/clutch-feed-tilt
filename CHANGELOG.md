@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.3.8 — "Over the Gun"
+**Wed Oct 21, 2026 · 8:02 AM HST**
+
+- The crosshair stays above the gun. Removed: the crosshair sliding down behind it.
+
 ## v0.3.7 — "Big Gun"
 **Wed Oct 21, 2026 · 8:00 AM HST**
 

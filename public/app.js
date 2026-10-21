@@ -9,6 +9,9 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+// the gun, at the bottom of the view (drawn in render())
+const GUN = ["      ||      ", "      ||      ", "     /##\\     ", "    /####\\    ", "   /######\\   ", "  /########\\  ", " |##########| "];
+
 let day = "", SEED = 0, myName = null;
 let open, enemies, squad, feed, P;
 const isOpen = (x, y) => x >= 0 && y >= 0 && x < C.MW && y < C.ML && open[y][x];
@@ -111,7 +114,6 @@ function render() {
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
   // the gun: at the bottom, under the crosshair, sliding left and right after it (P.gx eases toward P.aim in step())
-  const GUN = ["      ||      ", "      ||      ", "     /##\\     ", "    /####\\    ", "   /######\\   ", "  /########\\  ", " |##########| "];
   const gx = Math.round(P.gx) - 7, gy = H - GUN.length + (P.flash > 0 ? 1 : 0);
   GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 2 ? "g" : "t"); });
 
@@ -270,7 +272,7 @@ function loop(ts) {
 
 const view = $("view");
 // where the pointer is, in the view's half-size character cells
-const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(H - 2, (ev.clientY - r.top) / r.height * H)); };
+const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(H - GUN.length - 2, (ev.clientY - r.top) / r.height * H)); };   // the crosshair stays above the gun
 // on the whole game, not just the view: a message box sits over the view and would swallow the pointer moving across it
 $("game").addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
 view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
