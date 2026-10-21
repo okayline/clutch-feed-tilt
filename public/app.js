@@ -206,7 +206,8 @@ function frame(message) {
 }
 
 // 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms of the rails you've walked
-// through, the ways out of them, and an arrow for the way you face. floor.js draws extra hallways out of room 0 (an
+// through, the ways out of them, and an arrow for the way you face. A door to a room that isn't in today's corridor is
+// wall, as in the 3D view (a locked door still shows #). floor.js draws extra hallways out of room 0 (an
 // irl-dungeon rule), so it is handed the floor with every room number moved up by one. The map is turned so the
 // rails start out going up.
 function minimap() {
@@ -214,7 +215,7 @@ function minimap() {
   const [a, b] = cor.path, first = b.y < a.y ? 0 : b.x > a.x ? 1 : b.y > a.y ? 2 : 3;   // N, E, S, W
   const T = FLOOR.symTransform((4 - first) % 4);
   const view = {
-    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, ...T.pos(r.r, r.c), doors: Object.fromEntries(Object.entries(r.doors).map(([d, j]) => [T.dir(d), up(j)])) })],
+    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, ...T.pos(r.r, r.c), doors: Object.fromEntries(Object.entries(r.doors).filter(([, j]) => !f.rooms[j] || cor.shown.includes(j)).map(([d, j]) => [T.dir(d), up(j)])) })],
     start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
   };
   const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;

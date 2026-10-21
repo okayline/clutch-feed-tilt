@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.8.2 — "Walls"
+**Wed Oct 21, 2026 · 12:55 PM HST**
+
+- The minimap draws a wall wherever the 3D view has one: a door to a room that isn't in today's corridor is wall now. It still shows only the rooms you've been through, like 4Dungeon's. Removed: gaps in the minimap's walls that led nowhere.
+
 ## v0.8.1 — "Up"
 **Wed Oct 21, 2026 · 12:47 PM HST**
 
