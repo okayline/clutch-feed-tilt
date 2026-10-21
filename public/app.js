@@ -213,7 +213,9 @@ function frame(message) {
     : P.phase === "push" ? [[" YOUR SQUAD PUSHES IN", "t"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]
     : [[" 1v" + P.left + " ", "g"], ["LAST ALIVE", "b"], ["   ENEMIES LEFT " + P.left, "e"], ["   TAP TO SHOOT", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
-  status.push([" ".repeat(Math.max(1, FW - 2 - used - 12)), ""], [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
+  const again = P.done && !userOpen() ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
+  const right = again.reduce((n, [t]) => n + t.length, 0) + 12;
+  status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, [userOpen() ? "[ESC] CLOSE" : "[U]SER", "btn", userOpen() ? "esc" : "u"], [" ", ""]);
   const L = [top, "|" + head + "|", mid];
   for (let i = 0; i < 17; i++) L.push("|" + " ".repeat(VWc) + "|" + seg(rows[i] || [[""]], PW) + "|");
   // 4Dungeon's bottom (daily-dungeon screen.js): three log lines, then a row of buttons. The log is the kill feed, newest last.
@@ -276,7 +278,14 @@ function shoot(col, row) {
 function finish() {
   P.done = C.label(P);
   endBanner(P.done);
-  seal();
+  if (P.practice) P.seal = "PRACTICE, NOT SEALED."; else seal();
+}
+
+// After the run is over: play today's corridor again, as practice. It's never sent, so today's sealed run stays.
+function runItBack() {
+  build(); P.practice = true;
+  $("banner").hidden = true; bannerT = 0;
+  say("Practice run: it isn't sealed. Your sealed run stays as it was.", "t");
 }
 
 function endBanner(kind) {
@@ -369,8 +378,12 @@ $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("ba
 $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
-$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); });
-addEventListener("keydown", (ev) => { if (!userOpen() && P && (ev.key === "u" || ev.key === "U") && !ev.metaKey && !ev.ctrlKey && !ev.altKey) { ev.preventDefault(); openPlayer(); } });
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "esc") closePlayer(); else if (s.dataset.k === "r" && P.done) runItBack(); });
+addEventListener("keydown", (ev) => {
+  if (userOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
+  else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }
+});
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");

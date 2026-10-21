@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.5.9 — "Run It Back"
+**Wed Oct 21, 2026 · 9:12 AM HST**
+
+- Once your run is over, [R]UN IT BACK (or the R key) plays today's corridor again as practice. Practice runs aren't sealed, and your sealed run stays as it was. Removed: nothing.
+
 ## v0.5.8 — "Quiet"
 **Wed Oct 21, 2026 · 9:07 AM HST**
 
