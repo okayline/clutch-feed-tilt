@@ -173,7 +173,7 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
   const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
   const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: 3, label: C.label(live), log: live.log });
   assert.equal(a.run.hash, sha(dayHash + "|" + rec1), "the first run chains from the day's entry");
-  assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash }], "the registry got a checkpoint: the day and the run, the run's hash as the head");
+  assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash, detail: { day, label: C.label(live), hp: live.hp, hits: 3, shots: live.shots } }], "the registry got a checkpoint: the day and the run, the run's hash as the head, and the run's day, label, HP, hits and shots");
   assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
   assert.equal((await call("ann", "POST", "/api/run", { day, shots })).status, 409, "one run a day");
 

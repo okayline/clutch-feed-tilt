@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.9.3 — "Told on the Registry"
+**Wed Oct 21, 2026 · 1:08 PM HST**
+
+- The checkpoint each sealed run sends to the registry now carries the run's day, label, HP, hits and shots, so the registry's ledger page tells it as a sentence ("A CLUTCH run. 3 hits from 5 shots, 2 HP left.") in CLUTCH FEED TILT's own frame. No player and no shot log go with it. Removed: the plain "sealed its ledger here" line for this game.
+
 ## v0.9.2 — "Same Minimap"
 **Wed Oct 21, 2026 · 1:07 PM HST**
 
