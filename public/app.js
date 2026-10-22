@@ -77,7 +77,8 @@ function render() {
   const E = eye(), { x: px, y: py } = E;
   // Walls are outlines, as 4Dungeon draws them (daily-dungeon screen.js renderView), with no horizontal lines: a wall's
   // top and bottom edges are a \ or / where they slope away from you and nothing where they run flat, an upright |
-  // marks every block's edge, and a wall facing you is a field of dots, as 4Dungeon's dark end is. A door is filled.
+  // marks every corner (where one flat stretch of wall meets another, or ends against one further away), and a wall
+  // facing you has an upright | at the edge of every block in it. A door is filled.
   // First every column's ray (the same one the engine uses to tell whether a shot hits a wall first, corridor.js cast),
   // since an edge's slope needs the columns either side.
   const hits = [];
@@ -87,26 +88,39 @@ function render() {
     // a panel is one face of one wall block; how near its middle is sets how bright it is
     const fcx = side === 0 ? mx + (sx < 0 ? 1 : 0) : mx + 0.5, fcy = side === 0 ? my + 0.5 : my + (sy < 0 ? 1 : 0);
     h.pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)); h.id = mx + "," + my + "," + side;
+    // the flat stretch of wall it is on: the grid line its face lies along, and how far along that line it was hit. A
+    // run of blocks side by side is one stretch, drawn as one wall with no | between its blocks; a door is its own.
+    h.line = side + "," + (side === 0 ? mx + (sx < 0 ? 1 : 0) : my + (sy < 0 ? 1 : 0)) + "," + (h.door ? "x" : h.locked ? "l" : "");
+    h.at = side === 0 ? py + d * h.rdy : px + d * h.rdx;
     // its top, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you narrows away
     h.t = H / 2 - H / Math.max(0.3, d) / 2;
     hits.push(h);
   }
-  const same = (x, id) => x >= 0 && x < W && hits[x].id === id;
+  // are columns x and x + 1 on the same stretch of wall?
+  const joined = (x) => x >= 0 && x + 1 < W && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
   for (let x = 0; x < W; x++) {
-    const { d, side, door, locked, rdx, rdy, pd, id, t } = hits[x], top = Math.round(t), bot = Math.round(H - t);
+    const { d, side, door, locked, rdx, rdy, pd, t } = hits[x], top = Math.round(t), bot = Math.round(H - t);
     const k = door ? "g" : pd > 14 ? "d" : pd > 7 ? "t" : "";
-    // where the top edge crosses into this column and out of it: halfway to the columns either side on the same face
-    const tl = same(x - 1, id) ? (hits[x - 1].t + t) / 2 : t, tr = same(x + 1, id) ? (hits[x + 1].t + t) / 2 : t;
+    // where the top edge crosses into this column and out of it: halfway to the columns either side on the same stretch
+    const tl = joined(x - 1) ? (hits[x - 1].t + t) / 2 : t, tr = joined(x) ? (hits[x + 1].t + t) / 2 : t;
+    const sideOn = (side === 0 ? Math.abs(rdx) : Math.abs(rdy)) <= 0.8;   // a side wall, running away from you
+    // a corner between this column and the one to its left: the | goes on the nearer of the two, all the way up it
+    const corner = x > 0 && !joined(x - 1), edge = corner && hits[x - 1].d < d ? x - 1 : x;
+    if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(H - e.t)); y++) put(edge, y, "|", e.door ? "g" : e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
     // the edge is drawn only in the rows it steps through, so a shallow slope is a few steps and a flat one nothing
     const y0 = Math.round(Math.min(tl, tr)), y1 = Math.round(Math.max(tl, tr)), c = tr > tl ? "\\" : "/";
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-      if (x > 0 && !same(x - 1, id)) put(x, y, "|", k);
+      if (ch[y][x] === "|") continue;   // a corner drawn from the column to the right
       // the exit, while it's shut: a gold door; a locked door: # all over, as the minimap marks it
       else if (door || locked) put(x, y, "#", k);
-      // a wall facing you (its ray within about 37 degrees of straight on): dots, as 4Dungeon's dark end
-      else if ((side === 0 ? Math.abs(rdx) : Math.abs(rdy)) > 0.8) { if (x % 3 === 0 && y % 2 === 0 && (x / 3 + y / 2) % 2 === 0) put(x, y, ".", k); }
+      // a wall facing you (its ray within about 37 degrees of straight on): an upright | at the edge of every block in it
+      else if (!sideOn && x > 0 && hits[x - 1].id !== hits[x].id) put(x, y, "|", k);
     }
-    for (let y = y0; y < y1; y++) {
+    // a side wall's edge is one unbroken line: a column it crosses no row in still gets its \ or /, on the row it runs
+    // along, unless it slopes under 1 row in 4 columns (that would be a flat run of them); a wall facing you keeps its
+    // flat edge undrawn
+    const mid = Math.floor((tl + tr) / 2), [ya, yb] = y1 > y0 ? [y0, y1] : sideOn && Math.abs(tr - tl) >= 0.25 ? [mid, mid + 1] : [0, 0];
+    for (let y = ya; y < yb; y++) {
       put(x, y, c, k); put(x, H - 1 - y, c === "/" ? "\\" : "/", k);
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
@@ -145,7 +159,7 @@ function render() {
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
   const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
-  GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });
+  GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
   let out = "";
   for (let y = 0; y < H; y++) {
