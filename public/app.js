@@ -63,7 +63,6 @@ const SPIN_TICKS = 3;   // a drone's rotors turn every 3 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = { short: 0.25, tall: 0.25, drone: 0.1 }, GLITCH_HOLD = 2;   // a drone glitches less; a scrambled glyph stays 2 frames
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
 const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t * 2246822519, 3266489917); h ^= h >>> 15; h = Math.imul(h, 2654435761); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
-const RAMP = "@#%*+=-:";
 const eye = () => C.eyeOf(P);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
@@ -76,27 +75,39 @@ function render() {
   // walls are as tall as they are near, not as the ray is deep, so turning slides the picture sideways and changes
   // nothing else: 15 degrees moves it exactly 21 columns.
   const E = eye(), { x: px, y: py } = E;
-  let prev = "";
+  // Walls are outlines, as 4Dungeon draws them (daily-dungeon screen.js renderView), with no horizontal lines: a wall's
+  // top and bottom edges are a \ or / where they slope away from you and nothing where they run flat, an upright |
+  // marks every block's edge, and a wall facing you is a field of dots, as 4Dungeon's dark end is. A door is filled.
+  // First every column's ray (the same one the engine uses to tell whether a shot hits a wall first, corridor.js cast),
+  // since an edge's slope needs the columns either side.
+  const hits = [];
   for (let x = 0; x < W; x++) {
-    // the same ray the engine uses to tell whether a shot hits a wall first (corridor.js cast)
-    const { d, side, mx, my, door, locked, sx, sy, rdx, rdy } = C.cast(P, E, x);
+    const h = C.cast(P, E, x), { d, side, mx, my, sx, sy } = h;
     zbuf[x] = d;
-    // a panel is one face of one wall block: one character all over (by how near its middle is), with a line down its
-    // left edge. Each column of it is as tall as the wall is near along that column's ray, so a wall running beside
-    // you narrows away into the distance, its panels standing upright one behind another.
+    // a panel is one face of one wall block; how near its middle is sets how bright it is
     const fcx = side === 0 ? mx + (sx < 0 ? 1 : 0) : mx + 0.5, fcy = side === 0 ? my + 0.5 : my + (sy < 0 ? 1 : 0);
-    const pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)), id = mx + "," + my + "," + side;
-    const wh = H / Math.max(0.3, d), top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
-    const r = Math.min(RAMP.length - 1, Math.floor(pd / 1.6) + (side === 1 ? 1 : 0));
-    // every block's edge is drawn, however far: on a wall running away from you they crowd together, which is what
-    // shows it going away
-    const seam = x > 0 && id !== prev; prev = id;
+    h.pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)); h.id = mx + "," + my + "," + side;
+    // its top, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you narrows away
+    h.t = H / 2 - H / Math.max(0.3, d) / 2;
+    hits.push(h);
+  }
+  const same = (x, id) => x >= 0 && x < W && hits[x].id === id;
+  for (let x = 0; x < W; x++) {
+    const { d, side, door, locked, rdx, rdy, pd, id, t } = hits[x], top = Math.round(t), bot = Math.round(H - t);
+    const k = door ? "g" : pd > 14 ? "d" : pd > 7 ? "t" : "";
+    // where the top edge crosses into this column and out of it: halfway to the columns either side on the same face
+    const tl = same(x - 1, id) ? (hits[x - 1].t + t) / 2 : t, tr = same(x + 1, id) ? (hits[x + 1].t + t) / 2 : t;
+    // the edge is drawn only in the rows it steps through, so a shallow slope is a few steps and a flat one nothing
+    const y0 = Math.round(Math.min(tl, tr)), y1 = Math.round(Math.max(tl, tr)), c = tr > tl ? "\\" : "/";
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-      // the exit, while it's shut: a gold door
-      if (door) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "=", "g");
-      // a locked door: # all over, as the minimap marks it
-      else if (locked) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "#", pd > 14 ? "d" : "t");
-      else put(x, y, seam ? "|" : (y === top || y === bot - 1) && pd < 12 ? "_" : RAMP[r], pd > 14 ? "d" : pd > 7 ? "t" : "");
+      if (x > 0 && !same(x - 1, id)) put(x, y, "|", k);
+      // the exit, while it's shut: a gold door; a locked door: # all over, as the minimap marks it
+      else if (door || locked) put(x, y, "#", k);
+      // a wall facing you (its ray within about 37 degrees of straight on): dots, as 4Dungeon's dark end
+      else if ((side === 0 ? Math.abs(rdx) : Math.abs(rdy)) > 0.8) { if (x % 3 === 0 && y % 2 === 0 && (x / 3 + y / 2) % 2 === 0) put(x, y, ".", k); }
+    }
+    for (let y = y0; y < y1; y++) {
+      put(x, y, c, k); put(x, H - 1 - y, c === "/" ? "\\" : "/", k);
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
