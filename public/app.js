@@ -247,7 +247,7 @@ function frame(message) {
     ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
-    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["     " + time, "t"]],
+    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["  " + time, "t"], ["  " + (P.reload > 0 ? "RELOAD" : P.ammo + "/" + C.MAG), P.reload > 0 ? "e" : P.ammo <= 3 ? "g" : "t"]],
   ];
   const over = userOpen() || ledgerOpen();   // a panel covers the 3D view and the run waits
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
@@ -309,7 +309,7 @@ function showBanner(lines, secs) {
 // ---- play ---------------------------------------------------------------------------------------------------
 // A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
 function shoot() {
-  if (P.done) return;
+  if (P.done || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
   const hit = C.fire(P, P.aimY);
@@ -319,6 +319,7 @@ function shoot() {
   else if (hit === "body") say("YOU tagged ENEMY", "t");
   else if (hit === "leg") say("YOU tagged ENEMY in the leg", "t");
   else if (hit === "miss") say("YOU whiffed", "d");
+  if (P.reload > 0) say("RELOADING", "g");
   if ((hit === false || hit === "miss") && was < C.TILT_HALF && P.streak >= C.TILT_HALF) say("you're on TILT", "g");
 }
 

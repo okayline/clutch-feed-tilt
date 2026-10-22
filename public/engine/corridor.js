@@ -11,6 +11,7 @@ import FLOOR from "./floor.js";
 
 export const ENEMIES = 5;   // enemies on the map, all yours to shoot
 export const HP = 3;
+export const MAG = 17, RELOAD_TICKS = 23;   // a Glock 17's magazine; when it's empty you reload by itself, 23 ticks (1.5 s), with no shot possible, and the next magazine is full
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
 export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's wing
@@ -237,9 +238,10 @@ export const FIRE_TICKS = 25, DRONE_FIRE_TICKS = 50;   // then fires every 25 ti
 const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
 // What a hit takes off an enemy (10 HP), by the part of it hit (cell()): the chest and gun drop it in 5, the head in 3,
-// the crown (onCrown, the dead centre of that @) drops it at once, the legs take half a chest shot, and two hits on a drone's O drop it.
+// two crown shots (onCrown, the dead centre of that @) drop it, or 2 chest and 2 head, or 3 head; the legs take half a chest
+// shot, and two hits on a drone's O drop it.
 export const CROWN_ROW = 0.25;   // the crown is the middle half of its cell: a shot within this much of the cell's middle row (rows are kept to 2 decimals)
-export const ENEMY_HP = 10, CROWN_DMG = 10, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
+export const ENEMY_HP = 10, CROWN_DMG = 5, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())
 export const MAX_TICKS = 3 * 60 * FPS;    // three minutes: then the run is over, and you didn't get out
@@ -255,7 +257,7 @@ export const blocked = (R, x, y) => !isOpen(R.cor, x, y) || shutAt(R, x, y);
 export function newRun(cor) {
   return {
     cor, tick: 0, x: cor.start.x, y: cor.start.y, a: cor.start.a, keys: 0, shut: true, escaped: false,
-    hp: HP, shots: 0, hits: 0, heads: 0, kills: 0, streak: 0, calm: 0, over: false, log: [],
+    hp: HP, ammo: MAG, reload: 0, shots: 0, hits: 0, heads: 0, kills: 0, streak: 0, calm: 0, over: false, log: [],
     enemies: cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0, hp: ENEMY_HP, fire: Math.round(e.fire * FPS) })),
   };
 }
@@ -348,6 +350,7 @@ export function tick(R) {
   const ev = [];
   if (R.over) return ev;
   R.tick++;
+  if (R.reload > 0 && --R.reload === 0) R.ammo = MAG;
   walk(R);
   if (roomOf(R.cor, R.x, R.y) === R.cor.goal) { R.escaped = true; R.over = true; return ev; }
   for (const e of R.enemies) {
@@ -412,7 +415,7 @@ export function cell(b, c, r, spin = 0) {
 export const onHead = (b, c, r) => cell(b, c, r) === "@";
 
 // Is (col, row) on the crown: the middle @ of the head's top row (the middle 2 when that row is an even width)? A shot
-// there drops the enemy at once (CROWN_DMG) if the shot is within CROWN_ROW of that cell's middle (fire); the rest of
+// there does CROWN_DMG (half an enemy's HP) if the shot is within CROWN_ROW of that cell's middle (fire); the rest of
 // the head counts DMG["@"].
 export function onCrown(b, c, r) {
   if (r !== b.top || !onHead(b, c, r)) return false;
@@ -425,11 +428,13 @@ export function onCrown(b, c, r) {
 // A shot at the middle column of the view, on this row, now. Every shot counts, with or without anything to shoot at.
 // Returns false for a shot at nothing, "miss" for a miss with an enemy on the view, "leg", "body" or "head" for a hit
 // that leaves the enemy up, "kill" for a leg or body shot that drops it, "headkill" for a headshot that drops it, or null
-// if the run is over. The row is kept to 2 decimals (that is what the log holds); the log gets [tick, 2, row, hit].
+// if the run is over, or "dry" (nothing happens, nothing is logged) while you reload. The row is kept to 2 decimals (that is what the log holds); the log gets [tick, 2, row, hit].
 export function fire(R, row) {
   if (R.over) return null;
+  if (R.reload > 0) return "dry";
   row = Math.round(row * 100) / 100;
   R.shots++;
+  if (--R.ammo === 0) R.reload = RELOAD_TICKS;
   const [sx, sy] = scatter(R), c = Math.round(AIM + jit(R) + sx), r = Math.round(row + sy), eye = eyeOf(R);
   const wall = cast(R, eye, Math.max(0, Math.min(W - 1, c))).d;
   const up = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }));
@@ -474,7 +479,7 @@ export function replay(cor, inputs, onTick) {
   for (const [t, k, v] of inputs) {
     while (!R.over && R.tick < t) step();
     if (R.over) return null;   // an input after the run ended
-    if (k === 0) press(R, v); else if (k === 1) turn(R, v); else fire(R, v);
+    if (k === 0) press(R, v); else if (k === 1) turn(R, v); else if (fire(R, v) === "dry") return null;   // a shot while reloading can't have happened
   }
   while (!R.over) step();
   return R;
