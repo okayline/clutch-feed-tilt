@@ -82,7 +82,9 @@ let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live vie
 const MELT_SPEED = H / 1.1;   // rows a second
 function meltDelays() {
   const d = [];
-  for (let x = 0, v = Math.random() * 0.2; x < W; x++) { v = Math.max(0, Math.min(0.35, v + (Math.random() - 0.5) * 0.05)); d.push(v); }
+  // a ragged start: each column up to 0.15 s off its neighbour, and anywhere from 0 to 0.7 s in all, so the strips come
+  // down at different times (Doom's are a random walk too, f_wipe.c wipe_initMelt)
+  for (let x = 0, v = Math.random() * 0.4; x < W; x++) { v = Math.max(0, Math.min(0.7, v + (Math.random() - 0.5) * 0.3)); d.push(v); }
   return d;
 }
 function card(lines) {   // [[text, class], ...] centred down the middle of a blank view
@@ -102,7 +104,7 @@ function drawWipe() {
   const nu = wipe.card || snapshot(), g = Math.floor(wipe.t * C.FPS);
   let done = true;
   for (let x = 0; x < W; x++) {
-    const o = Math.max(0, Math.floor((wipe.t - wipe.d[x]) * wipe.speed));
+    const dt = Math.max(0, wipe.t - wipe.d[x]), o = Math.floor(dt * wipe.speed * (0.4 + 1.2 * Math.min(1, dt / 0.5)));   // each strip starts slow and speeds up, as Doom's do
     if (o < H) done = false;
     for (let y = 0; y < H; y++) {
       if (y >= o) { ch[y][x] = wipe.oldCh[y - o][x]; cl[y][x] = wipe.oldCl[y - o][x]; }
