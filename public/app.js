@@ -32,12 +32,12 @@ const GUN = [
   "    |########|    ",
 ];
 
-let day = "", SEED = 0, myName = null, GHOSTS = [];
+let day = "", SEED = 0, WING = 0, myName = null, GHOSTS = [];
 let cor, enemies, squad, feed, P, lag = 0;
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
-  cor = C.corridor(SEED, day);
+  cor = C.corridor(SEED, day, WING);
   // the fight itself (where you are, HP, shots, enemies) is the engine's run (corridor.js newRun); the rest is the page's
   P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
   enemies = P.enemies; lag = 0; turnLeft = 0;
@@ -167,7 +167,7 @@ function frame(message) {
   const dash = "+" + "-".repeat(FW - 2) + "+";
   // the day's 4Dungeon level and wing (corridor.js level), so you can tell which floor today's corridor is
   const lv = day ? C.level(day) : null;
-  const head = seg([[" TILT.EXE", "b"], ["                           ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${lv.wing + 1}` : "", "t"],
+  const head = seg([[" TILT.EXE", "b"], ["                           ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${WING}` : "", "t"],
                     [day ? `  SEED ${SEED.toString(16).toUpperCase().padStart(8, "0").slice(0, 4)}` : "", "d"]], FW - 2);
   if (message) {
     const L = [top, "|" + head + "|", mid];
@@ -461,7 +461,7 @@ addEventListener("keydown", (ev) => {
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
-  day = t.day; SEED = t.seed; myName = t.name; GHOSTS = t.ghosts || [];
+  day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
   if (t.run) showSealed(t.run); else build();
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
