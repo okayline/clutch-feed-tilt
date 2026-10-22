@@ -328,7 +328,7 @@ function showBanner(lines, secs) {
 
 // ---- play ---------------------------------------------------------------------------------------------------
 // A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
-// Gibs: chunks of data, 2 or 3 cells wide, flying off where a shot hits (at the crosshair), falling and gone in under a second.
+// Gibs: one chunk of data for each point of damage a hit does, 2 or 3 cells wide, flying off where a shot hits (at the crosshair), falling and gone in under a second.
 // Drawing only: nothing in the engine.
 const GIB_GLYPHS = "#%&@$8", GIB_LIFE = 0.65;
 function gib(n) {
@@ -344,8 +344,9 @@ function shoot() {
   if (P.done || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
+  const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
   const hit = C.fire(P, P.aimY);
-  if (hit && hit !== "miss" && hit !== "dry") gib(hit === "headkill" || hit === "kill" ? 18 : 9);
+  gib(hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0));   // one chunk per point of damage: legs 1, chest 2, head 4, crown 5, a drone's O 6
   if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
