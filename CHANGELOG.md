@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.12.1 — "Outlines"
+**Wed Oct 21, 2026 · 2:55 PM HST**
+
+- Walls in the 3D view are drawn in outline, the way 4Dungeon draws its own: a wall's top and bottom edges are \ and / where they run away from you, every block's corner is an upright |, and a wall facing you is a field of dots. Locked doors stay filled with #, and the gold exit is now gold # too. Removed: walls filled with shaded characters, the _ lines along their tops and bottoms, the = - fill on far walls, and the exit's = fill, so no wall has horizontal lines.
+
 ## v0.12 — "As Far As They've Gone"
 **Wed Oct 21, 2026 · 2:50 PM HST**
 
