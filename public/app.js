@@ -59,6 +59,7 @@ const ghostAt = (m) => m.track[Math.max(0, Math.min(m.track.length, P.done ? Inf
 // Enemies glitch: each frame a few of their cells show a scrambled glyph, like a demon's words decoding in 4Dungeon
 // (daily-dungeon index.html VOICE_GLYPHS, less the @ so only a head is ever an @). Only the drawing: a shot is still
 // checked against corridor.js cell().
+const FLAP_TICKS = 6;   // a bat's wings go up or down every 6 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = 0.25, GLITCH_HOLD = 2;   // a scrambled glyph stays 2 frames before it changes
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
 const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t * 2246822519, 3266489917); h ^= h >>> 15; h = Math.imul(h, 2654435761); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
@@ -115,7 +116,7 @@ function render() {
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-        let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / 3));
+        let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / FLAP_TICKS));
         if (c === "@" && k === "h") c = "o";
         else if (c && k === "e") { const t = Math.floor(P.tick / GLITCH_HOLD); if (noise(x, y, t) < GLITCH) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
         if (c) put(x, y, c, k);
