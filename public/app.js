@@ -359,7 +359,7 @@ function loop(ts) {
 // from then on a click shoots. Where pointer lock isn't allowed, the mouse still turns you as it crosses the view.
 const view = $("view");
 const KEYS = { w: 1, s: 2, a: 4, d: 8 };
-const TURN_PX = 2, TURN_TOUCH = 4, AIMY_PX = 0.06, AIMY_TOUCH = 0.1;   // turn units, and crosshair rows, per pixel
+const TURN_PX = 1, TURN_TOUCH = 4, AIMY_PX = 0.03, AIMY_TOUCH = 0.1;   // turn units, and crosshair rows, per pixel
 let held = 0, stick = 0, turnLeft = 0, touch = false, lockWorks = true;
 const locked = () => document.pointerLockElement === view;
 const canPlay = () => P && !P.done && !userOpen() && !ledgerOpen();
