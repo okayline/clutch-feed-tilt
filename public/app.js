@@ -506,7 +506,7 @@ addEventListener("keydown", (ev) => {
   const panel = () => { if (locked()) document.exitPointerLock(); held = 0; sendKeys(); };
   if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); panel(); }
   else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); panel(); }
-  else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }
+  else if (ev.key === "r" || ev.key === "R") { ev.preventDefault(); if (P.done) runItBack(); else if (C.reload(P)) say("RELOADING", "g"); }
 });
 
 // ---- today's corridor from the server -----------------------------------------------------------------------

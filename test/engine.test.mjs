@@ -273,3 +273,18 @@ test("a replay with a shot during a reload is refused", () => {
   const inputs = Array.from({ length: 18 }, () => [1, 2, 10]);
   assert.equal(C.replay(cor, inputs), null);
 });
+
+test("reload (R): refused with a full magazine; otherwise 23 ticks, the old rounds dropped, logged [tick, 3, 0], and it replays", () => {
+  const cor = C.corridor(12345, "2026-10-21", 2), R = C.newRun(cor);
+  assert.equal(C.reload(R), false, "a full magazine");
+  C.fire(R, 10); C.fire(R, 10);
+  assert.deepEqual([C.reload(R), R.reload, R.log.at(-1)], [true, C.RELOAD_TICKS, [0, 3, 0]]);
+  assert.equal(C.reload(R), false, "already reloading");
+  assert.equal(C.fire(R, 10), "dry");
+  for (let n = 0; n < C.RELOAD_TICKS; n++) C.tick(R);
+  assert.deepEqual([R.ammo, R.reload], [C.MAG, 0], "a full magazine, the 15 left dropped");
+  const again = C.replay(cor, R.log.map((s) => s.slice(0, 3)));
+  assert.deepEqual([again.shots, again.log], [R.shots, R.log], "the same inputs replay to the same shots and log");
+  assert.equal(C.replay(cor, [[0, 3, 0]]), null, "a reload with a full magazine can't have happened");
+  assert.equal(C.replay(cor, [[0, 3, 1]]), null, "a reload carries 0");
+});

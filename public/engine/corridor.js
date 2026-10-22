@@ -11,7 +11,7 @@ import FLOOR from "./floor.js";
 
 export const ENEMIES = 5;   // enemies on the map, all yours to shoot
 export const HP = 3;
-export const MAG = 17, RELOAD_TICKS = 23;   // a Glock 17's magazine; when it's empty you reload by itself, 23 ticks (1.5 s), with no shot possible, and the next magazine is full
+export const MAG = 17, RELOAD_TICKS = 23;   // a Glock 17's magazine; reload with R, or by itself when it's empty: 23 ticks (1.5 s) with no shot possible, then a full magazine
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
 export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's wing
@@ -376,6 +376,14 @@ export function press(R, keys) {
   R.keys = keys; R.log.push([R.tick, 0, keys]);
 }
 
+// Reload (the R key): swap in a full magazine, 23 ticks with no shot possible, the rounds left in the old one are
+// dropped. Does nothing (false) with a full magazine or while reloading. Logged as [tick, 3, 0].
+export function reload(R) {
+  if (R.over || R.reload > 0 || R.ammo === MAG) return false;
+  R.reload = RELOAD_TICKS; R.log.push([R.tick, 3, 0]);
+  return true;
+}
+
 // Turn by d TURN units (a whole number; + is to the right). Turns in the same tick are logged as one.
 export function turn(R, d) {
   if (R.over || !d) return;
@@ -472,6 +480,7 @@ export function replay(cor, inputs, onTick) {
     if (k === 0 ? !(Number.isInteger(v) && v >= 0 && v <= 15)
       : k === 1 ? !(Number.isInteger(v) && v !== 0 && Math.abs(v) <= 4 * TURN)
       : k === 2 ? !(Number.isFinite(v) && v >= 1 && v <= AIM_MAX_Y && ++shots <= MAX_SHOTS)
+      : k === 3 ? v !== 0
       : true) return null;
     last = s[0];
   }
@@ -479,7 +488,7 @@ export function replay(cor, inputs, onTick) {
   for (const [t, k, v] of inputs) {
     while (!R.over && R.tick < t) step();
     if (R.over) return null;   // an input after the run ended
-    if (k === 0) press(R, v); else if (k === 1) turn(R, v); else if (fire(R, v) === "dry") return null;   // a shot while reloading can't have happened
+    if (k === 0) press(R, v); else if (k === 1) turn(R, v); else if (k === 3) { if (!reload(R)) return null; } else if (fire(R, v) === "dry") return null;   // a shot while reloading, or a reload with a full magazine, can't have happened
   }
   while (!R.over) step();
   return R;
