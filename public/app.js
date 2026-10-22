@@ -126,14 +126,15 @@ function render() {
       // a wall facing you (its ray within about 37 degrees of straight on): an upright | at the edge of every block in it
       else if (!sideOn && x > 0 && hits[x - 1].id !== hits[x].id) put(x, y, "|", k);
     }
-    // the exit, while it's shut: a holo gate a little over head height: a bright post at each side and a field of
+    // the exit, while it's shut: one gold holo gate a little over head height (the only gold in the walls): a post at
+    // each side and a field of
     // flickering : ' . running down between them, as if it were falling
     if (gate && !hits[x].far) {
       const gt = Math.max(0, Math.round(H / 2 - GATE * H / Math.max(0.3, d))), post = !(x > 0 && hits[x - 1].gate) || !(x + 1 < W && hits[x + 1].gate);
       for (let y = gt; y < Math.min(H, bot); y++) {
-        if (post) { put(x, y, "|", "b"); continue; }
+        if (post) { put(x, y, "|", "g"); continue; }
         const c = " :'."[(((y - Math.floor(P.tick / 2) - Math.floor(noise(x, 0, 0) * 4)) % 4) + 4) % 4];   // each column falls out of step with the next
-        put(x, y, c, c === " " ? "" : "t");
+        put(x, y, c, c === " " ? "" : "g");
       }
     }
     // a side wall's edge is one unbroken line: a column it crosses no row in still gets its \ or /, on the row it runs
