@@ -175,7 +175,7 @@ function render() {
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
-  for (const g of P.gibs) put(Math.round(g.x), Math.round(g.y), g.c, g.t > GIB_LIFE / 3 ? "e" : "d");
+  for (const g of P.gibs) for (let j = 0; j < g.h; j++) for (let i = 0; i < g.w; i++) put(Math.round(g.x) + i, Math.round(g.y) + j, g.c, g.t > GIB_LIFE / 3 ? "e" : "d");   // a chunk: 2 or 3 cells wide, 1 or 2 tall
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
@@ -323,15 +323,15 @@ function showBanner(lines, secs) {
 
 // ---- play ---------------------------------------------------------------------------------------------------
 // A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
-// Gibs: little chunks of data flying off where a shot hits (at the crosshair), falling and gone in under half a second.
+// Gibs: chunks of data, 2 or 3 cells wide, flying off where a shot hits (at the crosshair), falling and gone in under a second.
 // Drawing only: nothing in the engine.
-const GIB_GLYPHS = "01#%&*", GIB_LIFE = 0.45;
+const GIB_GLYPHS = "#%&@$8", GIB_LIFE = 0.65;
 function gib(n) {
   if (reduced) return;
   const x = C.AIM + P.jit, y = P.aimY;
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * 2 * Math.PI, sp = 10 + Math.random() * 18;
-    P.gibs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - 6, t: GIB_LIFE * (0.6 + Math.random() * 0.4), c: GIB_GLYPHS[Math.floor(Math.random() * GIB_GLYPHS.length)] });
+    const a = Math.random() * 2 * Math.PI, sp = 20 + Math.random() * 30;
+    P.gibs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - 6, t: GIB_LIFE * (0.6 + Math.random() * 0.4), c: GIB_GLYPHS[Math.floor(Math.random() * GIB_GLYPHS.length)], w: 2 + (Math.random() < 0.4 ? 1 : 0), h: Math.random() < 0.3 ? 2 : 1 });
   }
 }
 
@@ -340,7 +340,7 @@ function shoot() {
   P.flash = 0.08;
   const was = P.streak;
   const hit = C.fire(P, P.aimY);
-  if (hit && hit !== "miss" && hit !== "dry") gib(hit === "headkill" || hit === "kill" ? 12 : 6);
+  if (hit && hit !== "miss" && hit !== "dry") gib(hit === "headkill" || hit === "kill" ? 18 : 9);
   if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
