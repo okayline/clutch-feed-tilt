@@ -70,7 +70,7 @@ const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t
 // nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
 // close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
 // underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
-const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8, CURSOR_WAIT = 1.5;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
 const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
 // The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
@@ -499,7 +499,8 @@ function step(dt) {
       $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
       if (P.fragT >= FRAG_HOLD + FRAG_FADE + FRAG_BLACK) {   // the view stays black (render) and the FEED banner fades in over it
         P.black = true; $("screen").style.opacity = "";
-        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); if (document.pointerLockElement) document.exitPointerLock(); }, { once: true });   // the mouse comes back once the banner is all the way in
+        const bn = $("banner"); bn.classList.add("fadein"); const run = P;
+        bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); setTimeout(() => { if (P === run && document.pointerLockElement) document.exitPointerLock(); }, CURSOR_WAIT * 1000); }, { once: true });   // the mouse comes back CURSOR_WAIT after the banner is all the way in (unless you ran it back)
         finish();
       }
     }
