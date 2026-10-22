@@ -79,7 +79,7 @@ const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P
 // frame), when you get out (onto YOU GOT OUT) and when you die (onto FRAGGED). The fight waits while it runs. Drawing only;
 // skipped with Reduce Motion.
 let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live view), t, d (each column's delay), then }
-const MELT_SPEED = H / 1.1;   // rows a second
+const MELT_SPEED = H / 1.4;   // rows a second
 function meltDelays() {
   const d = [];
   // a ragged start: each column up to 0.15 s off its neighbour, and anywhere from 0 to 0.7 s in all, so the strips come
