@@ -185,10 +185,19 @@ function render() {
   // the gun: one rigid piece at the bottom middle, swaying out the way you turn along a small arc (one row lower once it
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][reloadFrame()];
-  // reloading: two frames. First the gun drops 4 rows with the magazine out (the grip empty), then it comes back up 2 rows,
-  // magazine in, until the reload is done.
-  const magOut = reloadFrame() === 1;
+  const rf = reloadFrame();
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf];
+  // reloading: two frames. First the gun swings off to the right and drops 4 rows, the grip empty, and the old magazine
+  // falls away on its left; then it comes halfway back, 2 rows down, with a full magazine coming up on its left. RELOADING
+  // blinks above it the whole time.
+  const magOut = rf === 1;
+  if (rf) {
+    const fall = Math.round((1 - P.reload / C.RELOAD_TICKS) * 12);
+    const mag = rf === 1 ? ["[  ]", "[  ]", "[__]"] : ["[##]", "[##]", "[##]"];
+    const mx = gx - 6, my = rf === 1 ? H - 9 + fall : H - 1 - Math.max(0, fall - 6);
+    mag.forEach((row, i) => [...row].forEach((ch, k) => put(mx + k, my + i, ch, rf === 1 ? "d" : "t")));
+    if (Math.floor(P.tick / 3) % 2 === 0) [..."RELOADING"].forEach((ch, k) => put(Math.round(W / 2) - 4 + k, H - GUN.length - 2, ch, "g"));
+  }
   GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
   let out = "";
