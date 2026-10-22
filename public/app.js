@@ -56,6 +56,10 @@ function say(t, c) { feed.push([t.slice(0, 77), c]); if (feed.length > 3) feed.s
 const ghostAt = (m) => m.track[Math.max(0, Math.min(m.track.length, P.done ? Infinity : P.tick) - 1)];
 
 // ---- drawing the view ---------------------------------------------------------------------------------------
+// Enemies glitch: each frame a few of their cells show a scrambled glyph, like a demon's words decoding in 4Dungeon
+// (daily-dungeon index.html VOICE_GLYPHS, less the @ so only a head is ever an @). Only the drawing: a shot is still
+// checked against corridor.js cell().
+const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = 0.25;
 const RAMP = "@#%*+=-:";
 const eye = () => C.eyeOf(P);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
@@ -111,6 +115,7 @@ function render() {
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
         let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / 3));
         if (c === "@" && k === "h") c = "o";
+        else if (c && k === "e" && Math.random() < GLITCH) c = GLITCH_GLYPHS[Math.floor(Math.random() * GLITCH_GLYPHS.length)];
         if (c) put(x, y, c, k);
       }
     }
