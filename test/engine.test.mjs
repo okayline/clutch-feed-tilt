@@ -216,6 +216,15 @@ test("an enemy can't see you through a wall: standing still in the first room, n
   assert.ok(R.enemies.every((e) => e.state === "hidden"));
 });
 
+test("ghostRun: a sealed run plays as a ghost only if it ends with the HP, shots and hits it was sealed with", () => {
+  const [seed, d] = MAPS[0], cor = C.corridor(seed, d, 4), live = playBot(cor, { shootWall: 7 });
+  const g = { inputs: live.log.map((s) => s.slice(0, 3)), hp: live.hp, shots: live.shots, hits: live.hits };
+  assert.ok(C.ghostRun(C.corridor(seed, d, 4), g), "sealed under these rules: played");
+  // sealed under older rules: the same inputs ended with one more hit (a shot that hit then misses now)
+  assert.equal(C.ghostRun(C.corridor(seed, d, 4), { ...g, hits: g.hits + 1 }), null, "hits differ: left out");
+  assert.equal(C.ghostRun(C.corridor(seed, d, 4), { ...g, hp: g.hp - 1 }), null, "HP differs: left out");
+});
+
 test("replay: inputs that aren't a run are refused", () => {
   const cor = C.corridor(12345, "2026-10-21", 2);
   assert.equal(C.replay(cor, [[5, 0, 1], [4, 0, 0]]), null, "out of order");

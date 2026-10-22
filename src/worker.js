@@ -4,7 +4,7 @@
 //                                      so a wrong phone clock can't pick another day), its seed and how far its floor is
 //                                      open (corridor.js corridor), your name if you have a player,
 //                                      your run today if you've sealed one, and up to 3 other players' sealed runs today
-//                                      (name and inputs) for your ghost teammates
+//                                      (name, inputs, and the HP, shots and hits it was sealed with) for your ghost teammates
 //   POST /api/run {day, inputs}        seal today's run on the ledger (one per player per day): the server plays it
 //                                      again from its inputs, [[tick, kind, value], ...] (corridor.js), and seals what it got
 //   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
@@ -182,8 +182,8 @@ async function ghostsOf(env, day, playerId) {
   const { results } = await env.DB.prepare(
     `SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id
      WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT ?`).bind(day, playerId, GHOSTS).all();
-  return results.map((g) => ({ name: g.name, inputs: JSON.parse(g.record).inputs })).filter((g) => g.inputs)
-    .map((g) => ({ name: g.name, inputs: g.inputs.map((s) => s.slice(0, 3)) }));
+  return results.map((g) => ({ name: g.name, ...JSON.parse(g.record) })).filter((g) => g.inputs)
+    .map((g) => ({ name: g.name, inputs: g.inputs.map((s) => s.slice(0, 3)), hp: g.hp, shots: g.shots, hits: g.hits }));
 }
 
 // ---------- runs and the ledger ----------
