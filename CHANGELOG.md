@@ -4,6 +4,18 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.18.0 — "Hard Targets"
+**Wed Oct 21, 2026 · 5:05 PM HST**
+
+- Enemies have 16 HP, up from 10. Two crown shots (8 each) drop one, or a crown and 2 head shots; 4 head shots, 8 chest shots, 16 leg shots, or 3 hits on a drone's O. Removed: 10 HP, the crown at 5, and kills in 2 or 3 plain head shots.
+- The crown is about 1 pixel tall: a shot within 0.04 of the middle of the @'s row, one column wide. Removed: the crown 0.09 rows either side (about 2 pixels).
+- A shot goes wide from 2 tiles out, not 5, and twice as wide: 0.4 columns of swing (and under half as many rows) for every tile past 2, up to 10 tiles past it. Removed: every shot inside 5 tiles (most of a room) landing exactly on the crosshair, and 0.2 columns a tile.
+- HEADSHOT!! is only for a kill on the crown; a crown hit that doesn't kill says CROWN!, and a kill with a plain head hit is a plain frag. Removed: HEADSHOT!! on any kill that ended with a head hit.
+- The corridor melts in off a black screen. After a death, the mouse comes back 1.5 s after the FEED banner is in, not straight away. Removed: the start's title card (T I L T . E X E, the day and the level), and the mouse coming back the moment the banner finished fading in.
+- HP, the crown and the scatter change the rules (corridor.js), so a run sealed before this replays differently as a ghost.
+
+---
+
 ## v0.17.0 — "Melt"
 **Wed Oct 21, 2026 · 4:54 PM HST**
 
