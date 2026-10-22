@@ -237,11 +237,11 @@ const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ti
 export const FIRE_TICKS = 25, DRONE_FIRE_TICKS = 50;   // then fires every 25 ticks while it can see you (a drone, every 50)
 const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
-// What a hit takes off an enemy (10 HP), by the part of it hit (cell()): the chest and gun drop it in 5, the head in 3,
-// two crown shots (onCrown, the dead centre of that @) drop it, or 2 chest and 2 head, or 3 head; the legs take half a chest
-// shot, and two hits on a drone's O drop it.
-export const CROWN_ROW = 0.09;   // the crown is a little box in the middle of its cell: one column wide, and a shot within this much of the cell's middle row (under a fifth of a row, about 2px on a full-size screen; rows are kept to 2 decimals)
-export const ENEMY_HP = 10, CROWN_DMG = 5, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
+// What a hit takes off an enemy (16 HP), by the part of it hit (cell()): the chest and gun drop it in 8, the head in 4,
+// two crown shots (onCrown, the dead centre of that @) drop it, or a crown and 2 head; the legs take half a chest shot,
+// and three hits on a drone's O drop it.
+export const CROWN_ROW = 0.04;   // the crown is a tiny box in the middle of its cell: one column wide, and a shot within this much of the cell's middle row (under a tenth of a row, about 1px on a full-size screen; rows are kept to 2 decimals)
+export const ENEMY_HP = 16, CROWN_DMG = 8, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())
 export const MAX_TICKS = 3 * 60 * FPS;    // three minutes: then the run is over, and you didn't get out
