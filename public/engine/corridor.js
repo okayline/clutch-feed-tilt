@@ -50,11 +50,11 @@ export function level(day) {
 // every offer of two locked doors the day's seed opens one, so the floor is one a 4Dungeon player could walk. `wing`
 // (1 to WINGS, from the day's ledger entry) is the furthest wing 4Dungeon's players had opened when the day was sealed:
 // the floor is open that far, and the run is on the RUN_WINGS wings ending with it (or the first two, early in the
-// quarter). You start in the first room of the first of them, facing north (up on the minimap), and the exit is the
-// door into the room behind its last offer (the stairs, on the floor's last wing). Every open room is built, so the 3D
-// view has a door wherever the minimap (4Dungeon's) shows one; the enemies are only in the run's wings. A locked door
-// is wall, drawn as a locked door; a sealed one (the other door of an offer that was opened) is plain wall, as on the
-// minimap.
+// quarter). You start in the first room of the first of them, facing the way on, and the exit is the
+// door into the room behind its last offer (the stairs, on the floor's last wing). Only the run's wings (and the goal)
+// are built: a door out of them into a room of another wing is plain wall, in the 3D view and on the minimap (app.js), so
+// the run is a few rooms, not the whole floor. A locked door is wall, drawn as a locked door; a sealed one (the other door
+// of an offer that was opened) is plain wall, as on the minimap.
 //   floor       the wing generator's floor (for the minimap)
 //   level       level(day)
 //   route       the room numbers of the shortest way from the first room to the goal, through open doors
@@ -63,7 +63,7 @@ export function level(day) {
 //   locked      { "x,y": 1 } for the tiles of locked doors (wall, drawn as a door)
 //   blocks      [by][bx]: the room each 7 x 7 block of the tile map is (-1 for none)
 //   near        { room: [it and the rooms through its doors] }: where an enemy in that room can see you from
-//   start       { x, y, a }: where you start (the first room's centre) and the way you face (north)
+//   start       { x, y, a }: where you start (the first room's centre) and the way you face (to the next room on the way)
 //   exit        [[x, y]]: the exit door's tiles, shut until the enemies guarding it are down
 //   enemies     [{ x, y, tx, ty, room, guard, fire, kind }]: the notch in a wall an enemy waits in, where it steps out to,
 //               its room, whether it guards the exit, seconds from stepping out until it first fires, and its kind
@@ -87,8 +87,8 @@ export function corridor(seed, day, wing) {
   const route = [];
   for (let i = goal; i !== -1; i = prev[i]) route.unshift(i);
 
-  // the tile map: every room of the floor, with a room's width of wall all round
-  const built = rooms.map((r, i) => r ? i : -1).filter((i) => i >= 0);
+  // the tile map: the run's rooms, with a room's width of wall all round
+  const built = [...shown];
   const r0 = Math.min(...built.map((i) => rooms[i].r)) - 1, c0 = Math.min(...built.map((i) => rooms[i].c)) - 1;
   const w = (Math.max(...built.map((i) => rooms[i].c)) - c0 + 2) * S, h = (Math.max(...built.map((i) => rooms[i].r)) - r0 + 2) * S;
   const open = Array.from({ length: h }, () => new Array(w).fill(false));
@@ -111,16 +111,19 @@ export function corridor(seed, day, wing) {
         if (!(floor.sealed && floor.sealed[j])) for (const [tx, ty] of doorTiles(i, d)) locked[tx + "," + ty] = 1;
         continue;
       }
+      if (!shown.has(+j)) continue;   // a door into another wing: plain wall
       for (const [tx, ty] of doorTiles(i, d)) open[ty][tx] = true;
       near[i].push(j);
     }
   }
   const last = route.length - 1, guard = route[last - 1], c = (i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 });
   const exit = doorTiles(guard, Object.keys(rooms[guard].doors).find((d) => rooms[guard].doors[d] === goal));
-  const s0 = c(route[0]), start = { x: s0.x, y: s0.y, a: 3 * TURN / 4 };
+  // you face the door to the next room on the way (the room behind you is another wing's, walled off)
+  const s0 = c(route[0]), s1 = c(route[1]), start = { x: s0.x, y: s0.y, a: s1.x > s0.x ? 0 : s1.y > s0.y ? TURN / 4 : s1.x < s0.x ? TURN / 2 : 3 * TURN / 4 };
 
   // Enemies wait in a notch in a room's wall (a wall with no door) and step out into the room when they see you. Two
-  // guard the exit, in the room before it; the other three are dealt to the run's other rooms (not the first or the goal).
+  // guard the exit, in the room before it; the other three are dealt to the rooms on the way there (not the first or
+  // the goal), so you meet them as you go, or to the other rooms of the run if the way is too short to hold them.
   const spots = (i) => {
     const { x, y } = corner(i), out = [];
     for (const [d, [ux, uy]] of Object.entries(DIRS)) {
@@ -129,8 +132,9 @@ export function corridor(seed, day, wing) {
     }
     return out;
   };
-  const others = [...shown].filter((i) => i !== route[0] && i !== goal && i !== guard);
-  for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
+  const onWay = route.slice(1, -2), offWay = [...shown].filter((i) => !route.includes(i));
+  const shuffle = (l) => { for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } return l; };
+  const others = [...shuffle(onWay), ...shuffle(offWay)].slice(0, Math.max(onWay.length, 3));
   const homes = [guard, guard];
   for (let n = 0; homes.length < ENEMIES; n++) homes.push(others.length ? others[n % others.length] : guard);
   const used = new Set();
