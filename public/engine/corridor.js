@@ -237,7 +237,8 @@ const FIRE_TICKS = 25;                // then fires every 25 ticks while it can 
 const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
 // What a hit takes off an enemy (10 HP), by the part of it hit (cell()): the chest and gun drop it in 5, the head in 3,
-// the crown (onCrown, its upper half) drops it at once, the legs take half a chest shot, and two hits on a drone's O drop it.
+// the crown (onCrown, the dead centre of that @) drops it at once, the legs take half a chest shot, and two hits on a drone's O drop it.
+export const CROWN_ROW = 0.25;   // the crown is the middle half of its cell: a shot within this much of the cell's middle row (rows are kept to 2 decimals)
 export const ENEMY_HP = 10, CROWN_DMG = 10, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())
@@ -399,7 +400,7 @@ export function cell(b, c, r, spin = 0) {
 export const onHead = (b, c, r) => cell(b, c, r) === "@";
 
 // Is (col, row) on the crown: the middle @ of the head's top row (the middle 2 when that row is an even width)? A shot
-// there drops the enemy at once (CROWN_DMG) if the shot is in the upper half of that row (fire: row <= r); the rest of
+// there drops the enemy at once (CROWN_DMG) if the shot is within CROWN_ROW of that cell's middle (fire); the rest of
 // the head counts DMG["@"].
 export function onCrown(b, c, r) {
   if (r !== b.top || !onHead(b, c, r)) return false;
@@ -427,7 +428,7 @@ export function fire(R, row) {
   let got = seen ? "miss" : false;
   if (hit) {
     const part = cell(hit.b, c, r), head = part === "@";
-    hit.e.hp -= onCrown(hit.b, c, r) && row <= r ? CROWN_DMG : DMG[part]; R.hits++;
+    hit.e.hp -= onCrown(hit.b, c, r) && Math.abs(row - r) <= CROWN_ROW ? CROWN_DMG : DMG[part]; R.hits++;
     if (head) R.heads++;
     got = hit.e.hp > 0 ? (head ? "head" : part === "|" ? "leg" : "body") : head ? "headkill" : "kill";
     if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }

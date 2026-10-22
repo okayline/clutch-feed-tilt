@@ -171,7 +171,7 @@ test("the hitbox is the drawn figure, no spare cell; the crown is the middle 1 o
   assert.deepEqual(["-", "~", ":", "[", "]", "/", "\\"].map((p) => C.DMG[p]), [undefined, undefined, undefined, undefined, undefined, undefined, undefined], "only the O is a hit");
 });
 
-test("short, tall, drone in turn; a drone dies to two hits on its O; a short one: the leg gap misses, 5 chest shots, 3 head shots, a crown shot, only the upper half of the crown row", () => {
+test("short, tall, drone in turn; a drone dies to two hits on its O; a short one: the leg gap misses, 5 chest shots, 3 head shots, a crown shot, only the dead centre of the crown cell", () => {
   assert.deepEqual(C.corridor(12345, "2026-10-21", 2).enemies.map((e) => e.kind), ["short", "tall", "drone", "short", "tall"]);
   const rows = (b, part) => { const out = []; for (let r = b.top; r < b.bot; r++) if (C.cell(b, Math.round(C.AIM), r) === part) out.push(r); return out; };
   const drones = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "drone"); return faceFirst(cor); };
@@ -190,10 +190,9 @@ test("short, tall, drone in turn; a drone dies to two hits on its O; a short one
   const [S, c, cb] = shorts();
   assert.deepEqual([C.fire(S, cb.top), c.state], ["headkill", "dying"], "the crown drops it at once");
   assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [5, 1, 3, 1]);
-  const [T, , tb] = shorts();   // the crown is the upper half of its row: a shot a little above its middle drops it, a little below is a plain head hit
-  assert.equal(C.fire(T, tb.top + 0.4), "head", "the lower half of the crown row is head (4)");
-  const [U, , ub] = shorts();
-  assert.equal(C.fire(U, ub.top - 0.4), "headkill", "the upper half is the crown");
+  // the crown is the middle half of its cell: within 0.25 of the row's middle drops it, further out is a plain head hit (4)
+  const centre = (dy) => { const [X, , xb] = shorts(); return C.fire(X, xb.top + dy); };
+  assert.deepEqual([centre(0), centre(0.25), centre(-0.25), centre(0.3), centre(-0.4), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"]);
 });
 
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
