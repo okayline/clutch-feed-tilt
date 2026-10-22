@@ -4,6 +4,14 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.15.1 — "Crown Box"
+**Wed Oct 21, 2026 · 4:27 PM HST**
+
+- The crown is a little box in the middle of the head's middle `@`: one column wide and a third of a row tall (within 0.17 of the row's middle), about 4 pixels on a full-size screen. Removed: the crown being the middle half of its row (within 0.25).
+- This changes the rules (corridor.js `CROWN_ROW`), so a run sealed before this replays differently as a ghost.
+
+---
+
 ## v0.15.0 — "Magazine"
 **Wed Oct 21, 2026 · 4:14 PM HST**
 
