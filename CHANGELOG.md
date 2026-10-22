@@ -8,6 +8,7 @@ Newest first. Times are Hawaii time (HST).
 **Wed Oct 21, 2026 · 2:30 PM HST**
 
 - You walk anywhere on the floor: W A S D to walk and strafe, and walls stop you. You start facing north (up on the minimap). Removed: the rails, and the stops and turns on the spot along them.
+- Walls are drawn in perspective: each column of a wall is as tall as the wall is near along it, so a wall running beside you narrows away into the distance, one upright panel behind another. Removed: every wall panel drawn flat at the height of its middle, which made walls beside you flat horizontal bands.
 - The whole 4Dungeon floor is built, so there's a door in the 3D view wherever the minimap shows one, and a locked door (# on the minimap) is a # door you can't open. The enemies and the exit stay in the day's two wings. Removed: walls in the 3D view where the minimap shows a door to another wing.
 - Click the 3D view to take the mouse; moving it left and right turns you, up and down moves the crosshair. The crosshair stays in the middle and a click shoots there. Esc lets the mouse go. Removed: aiming by moving the crosshair over the view.
 - On a phone: put a thumb down on the left half of the view and drag to walk; drag on the right half to turn and aim, and tap there to shoot. Removed: tapping where you want to shoot.

@@ -74,11 +74,12 @@ function render() {
     // the same ray the engine uses to tell whether a shot hits a wall first (corridor.js cast)
     const { d, side, mx, my, door, locked, sx, sy, rdx, rdy } = C.cast(P, E, x);
     zbuf[x] = d;
-    // a panel is one face of one wall block: drawn flat, as tall as its middle is near, one character all over, with a
-    // line down its left edge. Only where you stand changes it, never which way you face.
+    // a panel is one face of one wall block: one character all over (by how near its middle is), with a line down its
+    // left edge. Each column of it is as tall as the wall is near along that column's ray, so a wall running beside
+    // you narrows away into the distance, its panels standing upright one behind another.
     const fcx = side === 0 ? mx + (sx < 0 ? 1 : 0) : mx + 0.5, fcy = side === 0 ? my + 0.5 : my + (sy < 0 ? 1 : 0);
     const pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)), id = mx + "," + my + "," + side;
-    const wh = H / pd, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
+    const wh = H / Math.max(0.3, d), top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
     const r = Math.min(RAMP.length - 1, Math.floor(pd / 1.6) + (side === 1 ? 1 : 0));
     const seam = x > 0 && id !== prev && pd < 9; prev = id;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
