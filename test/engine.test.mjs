@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import * as C from "../public/engine/corridor.js";
 import { VERSION } from "../public/engine/version.js";
+import { playBot } from "./bot.mjs";
 
 test("the 4Dungeon level of a day: the moon quarter at 00:00 UTC, one wing a day", () => {
   // the mean moon's first quarter fell on Oct 18 2026 and its full on Oct 26 (by the 29.53 day month from
@@ -13,46 +14,75 @@ test("the 4Dungeon level of a day: the moon quarter at 00:00 UTC, one wing a day
   assert.notEqual(C.level("2026-10-21").seed, C.level("2026-10-28").seed);
 });
 
-test("a map: the same seed gives the same map; the rails run through open tiles from room to room; 3 enemies in notches; 4 teammates", () => {
+const MAPS = [[1, "2026-10-21"], [2, "2026-10-14"], [3, "2026-10-19"], [12345, "2026-10-24"], [3359765128, "2026-10-28"]];
+
+test("a map: the same seed gives the same map; you start in the first room facing north; every door of the floor is built; 5 enemies in notches, 2 guarding the exit, the only way to the goal", () => {
   const day = "2026-10-21";
-  const a = C.corridor(12345, day), b = C.corridor(12345, day);
-  assert.deepEqual(a, b);
-  assert.notDeepEqual(C.corridor(1, day).path, C.corridor(2, day).path, "another seed, other doors");
-  for (const [seed, d] of [[1, day], [2, "2026-10-14"], [3, "2026-10-19"], [12345, "2026-10-24"], [3359765128, "2026-10-28"]]) {
-    const c = C.corridor(seed, d);
-    assert.ok(c.route.length >= 4, "at least 4 rooms on the rails");
-    // every step between rooms is one room (7 tiles) north, east, south or west, through open tiles all the way
-    for (let i = 1; i < c.path.length; i++) {
-      const p = c.path[i - 1], q = c.path[i];
-      assert.equal(Math.abs(q.x - p.x) + Math.abs(q.y - p.y), 7);
-      for (let t = 0; t <= 7; t++) assert.ok(c.open[Math.floor(p.y + (q.y - p.y) * t / 7)][Math.floor(p.x + (q.x - p.x) * t / 7)], `seed ${seed}: the rails are open`);
+  assert.deepEqual(C.corridor(12345, day), C.corridor(12345, day));
+  assert.notDeepEqual(C.corridor(1, day).open, C.corridor(2, day).open, "another seed, other doors");
+  for (const [seed, d] of MAPS) {
+    const c = C.corridor(seed, d), S = C.S;
+    assert.ok(c.route.length >= 3, `seed ${seed}: at least 3 rooms from the start to the goal`);
+    assert.equal(c.goal, c.route[c.route.length - 1]);
+    assert.equal(C.roomOf(c, c.start.x, c.start.y), c.route[0], "you start in the first room");
+    assert.ok(c.open[Math.floor(c.start.y)][Math.floor(c.start.x)]);
+    assert.equal(c.start.a, 3 * C.TURN / 4, "north: three quarters of the way round from east, y grows south");
+    // every room of the floor is built, with an open gap at every door the minimap draws open, and a locked door's
+    // 3 tiles marked where it has none
+    const f = c.floor, mid = (S - 1) / 2;
+    for (const [i, room] of f.rooms.entries()) {
+      if (!room) continue;
+      assert.ok(Object.values(c.blocks).some((row) => row.includes(i)), `room ${i} is built`);
+      for (const [dir, j] of Object.entries(room.doors)) {
+        const [ux, uy] = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] }[dir];
+        const bx = c.blocks.findIndex((row) => row.includes(i)), by = bx, cx = c.blocks[by] ? c.blocks[by].indexOf(i) : -1;
+        const x = cx * S + mid + ux * mid, y = by * S + mid + uy * mid;   // the middle tile of the door, on this room's edge
+        if (f.rooms[j]) assert.ok(c.open[y][x], `seed ${seed}: room ${i}'s ${dir} door is open`);
+        else assert.ok(!c.open[y][x] && c.locked[x + "," + y], `seed ${seed}: room ${i}'s ${dir} door is locked`);
+      }
     }
-    assert.ok(new Set(c.path.slice(1).map((q, i) => (q.x - c.path[i].x) + "," + (q.y - c.path[i].y))).size > 1, `seed ${seed}: the rails turn`);
-    assert.equal(c.enemies.length, 3);
+    // with the exit shut, the goal can't be reached from the start any other way
+    const R = C.newRun(c), seen = new Set([Math.floor(c.start.x) + "," + Math.floor(c.start.y)]), q = [[Math.floor(c.start.x), Math.floor(c.start.y)]];
+    while (q.length) { const [x, y] = q.pop(); for (const [dx2, dy2] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (x + dx2) + "," + (y + dy2); if (!seen.has(k) && !C.blocked(R, x + dx2, y + dy2)) { seen.add(k); q.push([x + dx2, y + dy2]); } } }
+    assert.ok(![...seen].some((k) => C.roomOf(c, ...k.split(",").map(Number)) === c.goal), `seed ${seed}: the exit is the only way in`);
+    // the exit: 3 tiles on the edge of the room before the goal, open on the map (a run shuts it)
+    assert.equal(c.exit.length, 3);
+    for (const [x, y] of c.exit) { assert.ok(c.open[y][x]); assert.equal(C.roomOf(c, x, y), c.route[c.route.length - 2]); }
+    assert.equal(c.enemies.length, 5);
+    assert.deepEqual(c.enemies.map((e) => e.guard), [true, true, false, false, false], "the first two guard the exit");
     for (const e of c.enemies) {
       assert.ok(c.open[Math.floor(e.y)][Math.floor(e.x)], "an enemy waits in an open notch");
       assert.ok(c.open[Math.floor(e.ty)][Math.floor(e.tx)], "and steps out into the room");
-      assert.ok(e.s > 0 && e.s <= c.end + 3);
+      assert.equal(C.roomOf(c, e.tx, e.ty), e.room);
+      assert.ok(e.room !== c.route[0] && e.room !== c.goal, "never in the first room or the goal");
     }
-    assert.deepEqual(c.squad.map((m) => m.tag), ["ghost", "ghost", "ghost", "bot"]);
+    assert.equal(new Set(c.enemies.map((e) => e.x + "," + e.y)).size, 5, "one enemy a notch");
   }
 });
 
-test("along the rails: halfway between two rooms you are halfway and face the way the rails go; turns are on the spot in 15 degree jumps", () => {
-  const path = [{ x: 3.5, y: 3.5 }, { x: 10.5, y: 3.5 }, { x: 10.5, y: 10.5 }];   // east, then south
-  assert.deepEqual(C.turns(path), [1]);
-  assert.deepEqual(C.along(path, 3.5), { x: 7, y: 3.5, dx: 1, dy: 0 });
-  const deg = (s, e) => { const r = C.along(path, s, e); return [r.x, r.y, Math.round(Math.atan2(r.dy, r.dx) * 180 / Math.PI)]; };
-  assert.deepEqual(deg(7, 0), [10.5, 3.5, 0]);      // on the turning room's centre: still facing the way in
-  assert.deepEqual(deg(7, 0.5), [10.5, 3.5, 45]);   // halfway round: 3 of 6 jumps
-  assert.deepEqual(deg(7, 0.99), [10.5, 3.5, 75]);  // never in between jumps: 5 of 6
-  assert.deepEqual(deg(10.5, 0), [10.5, 7, 90]);    // past it: facing the way out
+test("walking: W walks the way you face at 3 tiles a second; walls stop you; turning is in TURN units", () => {
+  const c = C.corridor(12345, "2026-10-21"), R = C.newRun(c);
+  const { x, y, a } = R, [dy, dx] = C.sincos(a * 2 * Math.PI / C.TURN);
+  C.press(R, 1); C.tick(R);
+  assert.ok(Math.abs(R.x - (x + dx * 0.2)) < 1e-12 && Math.abs(R.y - (y + dy * 0.2)) < 1e-12, "3 tiles a second is 0.2 a tick");
+  C.turn(R, C.TURN / 4); C.turn(R, C.TURN / 4); C.turn(R, -C.TURN / 4);
+  assert.equal(R.a, (a + C.TURN / 4) % C.TURN);
+  assert.deepEqual(R.log, [[0, 0, 1], [1, 1, C.TURN / 4]], "keys logged when they change; turns in one tick logged as one");
+  // turn to a side of the first room with no door (E S W N are 0, 1, 2, 3 quarter turns) and walk at it for 3 seconds:
+  // you end up against the wall, never in it
+  const doors = c.floor.rooms[c.route[0]].doors, side = ["E", "S", "W", "N"].findIndex((d) => doors[d] === undefined);
+  C.turn(R, ((side * C.TURN / 4 - R.a) % C.TURN + C.TURN) % C.TURN || C.TURN);
+  for (let i = 0; i < 45; i++) C.tick(R);
+  assert.ok(C.isOpen(c, Math.floor(R.x), Math.floor(R.y)));
+  const before = [R.x, R.y]; C.tick(R);
+  assert.deepEqual([R.x, R.y], before, "stopped by the wall");
 });
 
-test("the label: died = FEED; won with shots > 2.5 x hits = TILT; else CLUTCH", () => {
-  assert.equal(C.label({ hp: 0, shots: 3, hits: 3 }), "FEED");
-  assert.equal(C.label({ hp: 1, shots: 8, hits: 3 }), "TILT");     // 8 > 7.5
-  assert.equal(C.label({ hp: 1, shots: 7, hits: 3 }), "CLUTCH");   // 7 <= 7.5
+test("the label: died or never got out = FEED; got out with shots > 2.5 x hits = TILT; else CLUTCH", () => {
+  assert.equal(C.label({ hp: 0, shots: 3, hits: 3, escaped: false }), "FEED");
+  assert.equal(C.label({ hp: 2, shots: 3, hits: 3, escaped: false }), "FEED");
+  assert.equal(C.label({ hp: 1, shots: 8, hits: 3, escaped: true }), "TILT");     // 8 > 7.5
+  assert.equal(C.label({ hp: 1, shots: 7, hits: 3, escaped: true }), "CLUTCH");   // 7 <= 7.5
 });
 
 test("VERSION matches the newest CHANGELOG heading", () => {
@@ -70,61 +100,71 @@ test("sin, cos and atan2 from + - * / and sqrt: within 1e-15 of Math's, exact at
   assert.deepEqual([C.atan2(0, 1), C.atan2(1, 0), C.atan2(0, -1), C.atan2(-1, 0)], [0, Math.PI / 2, Math.PI, -Math.PI / 2]);
 });
 
-// Plays a run the way the page does (app.js step and shoot): shots land between ticks, at the tick the run is on.
-// It shoots at each enemy that's out, a little before it fires, and at a bare wall every 7th tick.
-function playLive(cor) {
-  const R = C.newRun(cor);
-  while (!R.over) {
-    if (R.tick % 7 === 3) C.fire(R, 10.5, 20);
-    for (const e of R.enemies) if (e.state === "out" && e.fire < 12) { const b = C.enemyBox(C.eyeOf(R), e); if (b) C.fire(R, b.sxc, (b.top + b.bot) / 2); }
-    C.tick(R);
-  }
-  return R;
-}
-
-test("replay: the same shots give the same run as playing it live, on every map tried", () => {
-  for (const [seed, d] of [[12345, "2026-10-21"], [1, "2026-10-14"], [3, "2026-10-19"], [3359765128, "2026-10-28"]]) {
-    const cor = C.corridor(seed, d), live = playLive(cor);
-    assert.equal(live.kills, 3, `seed ${seed}: all 3 enemies down`);
+test("replay: the same inputs give the same run as playing it live, on every map tried; the exit opens once its guards are down", () => {
+  for (const [seed, d] of MAPS) {
+    const cor = C.corridor(seed, d), live = playBot(cor, { shootWall: 7 });
+    assert.ok(live.escaped, `seed ${seed}: the bot got out`);
+    assert.ok(live.enemies.filter((e) => e.guard).every((e) => e.state === "dead" || e.state === "dying"), "past both guards");
     assert.ok(live.shots > live.hits, "and some misses");
     const again = C.replay(C.corridor(seed, d), live.log.map((s) => s.slice(0, 3)));
-    assert.deepEqual([again.hp, again.shots, again.hits, again.tick, again.log], [live.hp, live.shots, live.hits, live.tick, live.log]);
+    assert.deepEqual([again.hp, again.shots, again.hits, again.tick, again.escaped, again.x, again.y, again.log], [live.hp, live.shots, live.hits, live.tick, live.escaped, live.x, live.y, live.log]);
   }
 });
 
-test("an enemy takes 3 body shots, or a headshot and a body shot; a headshot alone doesn't drop it", () => {
-  const cor = C.corridor(12345, "2026-10-21"), R = C.newRun(cor);
-  while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
-  const a = R.enemies.find((e) => e.state === "out"), box = C.enemyBox(C.eyeOf(R), a);
-  const legs = Math.round(box.bot - 1), mid = Math.round(box.sxc);   // the bottom row, the middle column: body, not head
-  assert.deepEqual([C.fire(R, mid, legs), C.fire(R, mid, legs), C.fire(R, mid, legs)], ["body", "body", "kill"]);
+// Play the bot's run up to the tick it first shoots (an enemy is out), then stand and face that enemy until it is on
+// the middle column: returns the run, the enemy and its box.
+function faceFirst(cor) {
+  const bot = playBot(cor), first = bot.log.find((s) => s[1] === 2)[0], R = C.newRun(cor);
+  for (const [t, k, v] of bot.log) { if (t >= first) break; while (R.tick < t) C.tick(R); if (k === 0) C.press(R, v); else if (k === 1) C.turn(R, v); }
+  C.press(R, 0);
+  for (let n = 0; n < 60; n++) {
+    const e = R.enemies.find((e) => e.state === "out");
+    if (e) {
+      const want = Math.round(C.atan2(e.y - R.y, e.x - R.x) * C.TURN / (2 * Math.PI));
+      C.turn(R, ((((want - R.a) % C.TURN) + C.TURN * 1.5) % C.TURN) - C.TURN / 2);
+      const b = C.enemyBox(C.eyeOf(R), e);
+      if (b && Math.abs(b.sxc - C.AIM) < 1) return [R, e, b];
+    }
+    C.tick(R);
+  }
+  throw new Error("no enemy came out");
+}
+
+test("an enemy takes 3 body shots; a headshot counts 2; the head is the drawn @ only", () => {
+  const [R, a, box] = faceFirst(C.corridor(12345, "2026-10-21")), legs = box.bot - 1;
+  assert.deepEqual([C.fire(R, legs), C.fire(R, legs), C.fire(R, legs)], ["body", "body", "kill"]);
   assert.equal(a.state, "dying");
-  while (!R.over && !R.enemies.some((e) => e.state === "out")) C.tick(R);   // on to the next enemy
-  const b = R.enemies.find((e) => e.state === "out"), bb = C.enemyBox(C.eyeOf(R), b), bl = Math.round(bb.bot - 1), bm = Math.round(bb.sxc);
-  assert.deepEqual([C.onHead(bb, bm, bb.top), C.onHead(bb, bm, bb.top - 1)], [true, false], "the head is the drawn @ only, no spare row above");
-  assert.deepEqual([C.fire(R, bm, bb.top), C.fire(R, bm, bl)], ["head", "kill"], "a headshot (2) leaves it up; a body shot (1) then drops it");
+  assert.deepEqual([C.onHead(box, C.AIM, box.top), C.onHead(box, C.AIM, box.top - 1)], [true, false], "no spare row above the head");
+  assert.deepEqual([R.hits, R.kills], [3, 1]);
+  const [Q, b, bb] = faceFirst(C.corridor(12345, "2026-10-21"));
+  assert.deepEqual([C.fire(Q, bb.top), C.fire(Q, bb.bot - 1)], ["head", "kill"], "a headshot (2) leaves it up; a body shot (1) then drops it");
   assert.equal(b.state, "dying");
-  assert.deepEqual([R.hits, R.kills, R.heads], [5, 2, 1]);
 });
 
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
-  const R = C.newRun(C.corridor(12345, "2026-10-21"));
-  assert.equal(C.fire(R, 40, 10), false); assert.equal(R.streak, 0.25);
-  while (!R.enemies.some((e) => e.state === "out")) C.tick(R);
-  const b = C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out"));
-  assert.ok(b.rr >= 0 && b.l < C.W, "the enemy is on the view");
-  assert.equal(C.fire(R, b.l > 10 ? 0 : 93, 1), "miss"); assert.equal(R.streak, 3);
-  C.fire(R, b.l > 10 ? 0 : 93, 1); assert.equal(R.streak, 4.5);
+  const R0 = C.newRun(C.corridor(12345, "2026-10-21"));
+  assert.equal(C.fire(R0, 10), false); assert.equal(R0.streak, 0.25);
+  const [R, , b] = faceFirst(C.corridor(12345, "2026-10-21"));
+  C.turn(R, 80);   // 80 units is 7 degrees: the enemy is about 10 columns left of the crosshair, still on the view
+  assert.ok(C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out")).rr < C.AIM - 2);
+  assert.equal(C.fire(R, b.top), "miss"); assert.equal(R.streak, 3);
+  C.fire(R, b.top); assert.equal(R.streak, 4.5);
 });
 
-test("replay: no shots and you die with 0 hits; shots that aren't a run are refused", () => {
-  const cor = C.corridor(12345, "2026-10-21"), R = C.replay(cor, []);
-  assert.deepEqual([R.hp, R.shots, R.hits, C.label(R)], [0, 0, 0, "FEED"]);
-  const end = R.tick;
-  assert.equal(C.replay(cor, [[5, 40, 10], [4, 40, 10]]), null, "out of order");
-  assert.equal(C.replay(cor, [[end + 1, 40, 10]]), null, "after the run ended");
-  assert.equal(C.replay(cor, [[5, 94, 10]]), null, "off the view");
-  assert.equal(C.replay(cor, [[5, 40, 30]]), null, "below the crosshair's reach");
-  assert.equal(C.replay(cor, [[5.5, 40, 10]]), null, "a tick is a whole number");
+test("an enemy can't see you through a wall: standing still in the first room, nobody wakes and you time out", () => {
+  const R = C.replay(C.corridor(12345, "2026-10-21"), []);
+  assert.deepEqual([R.hp, R.tick, R.escaped, C.label(R)], [3, C.MAX_TICKS, false, "FEED"]);
+  assert.ok(R.enemies.every((e) => e.state === "hidden"));
+});
+
+test("replay: inputs that aren't a run are refused", () => {
+  const cor = C.corridor(12345, "2026-10-21");
+  assert.equal(C.replay(cor, [[5, 0, 1], [4, 0, 0]]), null, "out of order");
+  assert.equal(C.replay(cor, [[C.MAX_TICKS + 1, 0, 1]]), null, "after the end");
+  assert.equal(C.replay(cor, [[5, 0, 16]]), null, "no such keys");
+  assert.equal(C.replay(cor, [[5, 1, 0.5]]), null, "a turn is a whole number");
+  assert.equal(C.replay(cor, [[5, 2, 30]]), null, "below the crosshair's reach");
+  assert.equal(C.replay(cor, [[5, 3, 1]]), null, "no such input");
+  assert.equal(C.replay(cor, [[5.5, 0, 1]]), null, "a tick is a whole number");
   assert.equal(C.replay(cor, "nope"), null);
 });

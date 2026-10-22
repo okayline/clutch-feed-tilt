@@ -37,8 +37,9 @@
   .ver { color: var(--dim); text-align: right; padding-right: 1ch; font-size: .8em; margin-top: .3em; }
   .view {
     position: absolute; left: 1ch; top: 3.15em; width: 47ch; height: 17.85em;
-    background: var(--bg); overflow: hidden; cursor: none; touch-action: manipulation;
+    background: var(--bg); overflow: hidden; cursor: none; touch-action: none;
   }
+  .view:focus { outline: none; }   /* focused on click so the keys reach the game (app.js); the crosshair shows where you are */
   .view pre { font-size: .5em; }
   .view.hurt { box-shadow: inset 0 0 0 .25em var(--enemy); }
   .game.shake { animation: shake .18s linear; }
@@ -68,7 +69,7 @@
 <div class="game" id="game">
   <pre id="frame"></pre>
   <div class="ver" id="version"></div>
-  <div class="view" id="view" aria-label="Tap or click to shoot"><pre id="screen"></pre></div>
+  <div class="view" id="view" tabindex="-1" aria-label="Click to capture the mouse, then click to shoot. On a phone: drag on the left to walk, drag on the right to turn, tap to shoot"><pre id="screen"></pre></div>
   <div class="banner" id="banner" hidden><pre id="bannerText"></pre></div>
   <div class="panel" id="panel" hidden><pre></pre></div>
   <div class="panel" id="ledgerPanel" hidden><pre></pre></div>

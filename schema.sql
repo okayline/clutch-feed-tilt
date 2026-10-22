@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS runs (
   created_at  INTEGER NOT NULL,       -- unix seconds
   UNIQUE (player_id, day)
 );
+CREATE INDEX IF NOT EXISTS runs_day ON runs (day, id);   -- the day's newest runs, for ghost teammates
 
 -- One SHA-256 hash chain: one entry per UTC day (its hash is the day's seed) and one per run (src/ledger.js).
 -- Records hold player ids, never names.

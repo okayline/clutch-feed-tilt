@@ -32,36 +32,28 @@ const GUN = [
   "    |########|    ",
 ];
 
-let day = "", SEED = 0, myName = null;
+let day = "", SEED = 0, myName = null, GHOSTS = [];
 let cor, enemies, squad, feed, P, lag = 0;
 
 // ---- a run --------------------------------------------------------------------------------------------------
 function build() {
   cor = C.corridor(SEED, day);
   // the fight itself (where you are, HP, shots, enemies) is the engine's run (corridor.js newRun); the rest is the page's
-  P = Object.assign(C.newRun(cor), { aim: W / 2, gx: W / 2, aimY: H / 2 - 1, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null });
-  enemies = P.enemies; lag = 0;
-  squad = cor.squad.map((m) => ({ ...m, k: 0, dead: false }));
-  // What the teammates did, replayed as kill-feed lines: two of them trade, then all four go down. The last line is
-  // the tick the engine turns it 1 v 3 (newRun clutchTick).
-  const s = squad, t0 = cor.t0;
-  Object.assign(P, {
-    script: [
-      [t0, () => { s[0].k++; P.left--; say(`${s[0].n} fragged ENEMY`, "h"); }],
-      [t0 + 1.2, () => { s[3].dead = true; say(`BOT_FEEDER got gibbed`, "e"); }],
-      [t0 + 2.0, () => { s[1].dead = true; say(`${s[1].n} was fragged`, "e"); }],
-      [t0 + 2.7, () => { s[2].k++; P.left--; say(`${s[2].n} fragged ENEMY`, "h"); }],
-      [t0 + 3.3, () => { s[2].dead = true; say(`${s[2].n} was fragged`, "e"); }],
-      [t0 + 3.9, () => { s[0].dead = true; say(`${s[0].n} was fragged`, "e"); clutchMoment(); }],
-    ].map(([t, fn]) => [C.ticksOf(t), fn]),
-  });
+  P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
+  enemies = P.enemies; lag = 0; turnLeft = 0;
+  // Ghost teammates: other players' sealed runs today (/api/today ghosts), played again here (corridor.js replay) to
+  // get where they were on every tick. They walk beside you; what they did is told in the kill feed as it happens.
+  squad = GHOSTS.map((g) => {
+    const track = [];
+    const R = C.replay(cor, g.inputs, (r) => track.push({ x: r.x, y: r.y, hp: r.hp, k: r.kills, over: r.over, out: r.escaped }));
+    return R && track.length ? { n: g.name, track } : null;
+  }).filter(Boolean);
   feed = [];
 }
 function say(t, c) { feed.push([t.slice(0, 77), c]); if (feed.length > 3) feed.shift(); }
 
-function clutchMoment() {
-  showBanner([["", ""], ["   1 v " + P.left + "   ", "big g"], ["", ""], ["LAST MAN STANDING", "b"]], 1.6);
-}
+// a ghost on this tick of your run (its last tick once its run is over)
+const ghostAt = (m) => m.track[Math.max(0, Math.min(m.track.length, P.done ? Infinity : P.tick) - 1)];
 
 // ---- drawing the view ---------------------------------------------------------------------------------------
 const RAMP = "@#%*+=-:";
@@ -73,37 +65,47 @@ const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x]
 
 function render() {
   for (let y = 0; y < H; y++) { ch[y].fill(" "); cl[y].fill(""); }
-  // the camera: on the rails, facing along them. Each column looks COL further round than the one to its left and the
-  // walls are as tall as they are near, not as the ray is deep, so a turn on the spot slides the picture sideways and
-  // changes nothing else: a 15 degree jump moves it exactly 21 columns.
-  const E = eye(), { x: px, y: py } = E, rail = C.along(cor.path, P.s);
+  // the camera: where you stand, the way you face. Each column looks COL further round than the one to its left and the
+  // walls are as tall as they are near, not as the ray is deep, so turning slides the picture sideways and changes
+  // nothing else: 15 degrees moves it exactly 21 columns.
+  const E = eye(), { x: px, y: py } = E;
   let prev = "";
   for (let x = 0; x < W; x++) {
     // the same ray the engine uses to tell whether a shot hits a wall first (corridor.js cast)
-    const { d, side, mx, my, sx, sy, rdx, rdy } = C.cast(cor, E, x);
+    const { d, side, mx, my, door, locked, sx, sy, rdx, rdy } = C.cast(P, E, x);
     zbuf[x] = d;
-    // a panel is one face of one wall block: drawn flat, as tall as its middle is near, one character all over, with a
-    // line down its left edge. Only where you stand changes it, never which way you face.
+    // a panel is one face of one wall block: one character all over (by how near its middle is), with a line down its
+    // left edge. Each column of it is as tall as the wall is near along that column's ray, so a wall running beside
+    // you narrows away into the distance, its panels standing upright one behind another.
     const fcx = side === 0 ? mx + (sx < 0 ? 1 : 0) : mx + 0.5, fcy = side === 0 ? my + 0.5 : my + (sy < 0 ? 1 : 0);
     const pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)), id = mx + "," + my + "," + side;
-    const wh = H / pd, top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
+    const wh = H / Math.max(0.3, d), top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
     const r = Math.min(RAMP.length - 1, Math.floor(pd / 1.6) + (side === 1 ? 1 : 0));
-    const seam = x > 0 && id !== prev && pd < 9; prev = id;
+    // every block's edge is drawn, however far: on a wall running away from you they crowd together, which is what
+    // shows it going away
+    const seam = x > 0 && id !== prev; prev = id;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-      put(x, y, seam ? "|" : (y === top || y === bot - 1) && pd < 12 ? "_" : RAMP[r], pd > 14 ? "d" : pd > 7 ? "t" : "");
+      // the exit, while it's shut: a gold door
+      if (door) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "=", "g");
+      // a locked door: # all over, as the minimap marks it
+      else if (locked) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "#", pd > 14 ? "d" : "t");
+      else put(x, y, seam ? "|" : (y === top || y === bot - 1) && pd < 12 ? "_" : RAMP[r], pd > 14 ? "d" : pd > 7 ? "t" : "");
     }
-    // the floor grid: only the lines running the way the rails go, so nothing scrolls toward you
+    // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
       const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
-      const wv = Math.abs(rail.dx) < Math.abs(rail.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
+      const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
   }
   // enemies, far to near
   // the same boxes the engine checks a shot against (corridor.js enemyBox)
-  const vis = enemies.filter((e) => e.state !== "hidden" || e.s - P.s < 9).map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b)
-    .sort((a, b) => b[1].ry - a[1].ry);
+  // and ghost teammates, drawn in the ghost colour with an o for a head
+  const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost" }));
+  const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
+    .map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
   for (const [e, { sxc, ry, sh, l, rr, top, bot }] of vis) {
+    const k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       const u = (x - l) / Math.max(1, rr - l);
@@ -111,23 +113,23 @@ function render() {
         const f = (y - top) / Math.max(1, sh);
         let c = "";
         if (e.state === "dying") c = "%";
-        else if (f < C.HEAD) c = Math.abs(u - 0.5) < C.HEAD_W ? "@" : "";
+        else if (f < C.HEAD) c = Math.abs(u - 0.5) < C.HEAD_W ? (k === "h" ? "o" : "@") : "";
         else if (f < 0.6) c = Math.abs(u - 0.5) < 0.36 ? "#" : (f > 0.3 && f < 0.42 && u > 0.5) ? "=" : "";
         else c = (Math.abs(u - 0.3) < 0.11 || Math.abs(u - 0.7) < 0.11) ? "|" : "";
-        if (c) put(x, y, c, "e");
+        if (c) put(x, y, c, k);
       }
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
-  // crosshair
-  const ax = Math.round(P.aim + P.jit), ay = Math.round(P.aimY);
+  // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
+  const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
-  // the gun: one rigid piece at the bottom middle, moving after the crosshair along a small arc (one row lower once it is
-  // more than halfway out to the side) and kicking down a row when it fires. P.gx eases toward the pointer in step().
-  const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, (P.gx - W / 2) * 0.2));
+  // the gun: one rigid piece at the bottom middle, swaying out the way you turn along a small arc (one row lower once it
+  // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
+  const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
   const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
   GUN.forEach((s, i) => { for (let k = 0; k < s.length; k++) if (s[k] !== " ") put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });
 
@@ -180,8 +182,14 @@ function frame(message) {
     [[" SQUAD", ""], ["            HP    K", "t"]],
     [[rule, "d"]],
     [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.kills ?? "-"), "b"]],
-    ...squad.map((m) => [[" " + pad(m.n, 10), m.dead ? "d" : m.tag === "bot" ? "t" : "h"], [m.tag === "bot" ? " bot  " : " ghost", "d"],
-                         [" ", ""], [m.dead ? "DEAD " : "[###]", m.dead ? "e" : "t"], ["  " + m.k, m.dead ? "d" : "t"]]),
+    // ghost teammates (up to 3), then blank rows so the minimap stays put
+    ...[0, 1, 2, 3].map((i) => {
+      const m = squad[i];
+      if (!m) return i === 0 && !squad.length ? [[" NO GHOSTS YET TODAY", "d"]] : [[""]];
+      const g = ghostAt(m), dead = g.over && !g.out;
+      return [[" " + pad(m.n, 10), dead ? "d" : "h"], [" ghost", "d"], [" ", ""],
+              [dead ? "DEAD " : g.out ? "OUT  " : "[" + "#".repeat(g.hp) + " ".repeat(C.HP - g.hp) + "]", dead ? "e" : "t"], ["  " + g.k, dead ? "d" : "t"]];
+    }),
     [[rule, "d"]],
     [[""]],
     ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
@@ -193,8 +201,8 @@ function frame(message) {
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
     : ledgerOpen() ? [[" LEDGER: EVERY SEALED DAY AND RUN. THE RUN WAITS.", "t"]]
     : P.done ? [[" RUN OVER. ", "b"], [P.seal || "", "t"]]
-    : P.phase === "push" ? [[" SQUAD IS MOVING IN", "t"], ["   TARGETS LEFT " + P.left, "e"], ["   CLICK TO FRAG", "d"]]
-    : [[" 1v" + P.left + " ", "g"], ["LAST MAN STANDING", "b"], ["   TARGETS LEFT " + P.left, "e"], ["   CLICK TO FRAG", "d"]]);
+    : [[" TARGETS LEFT " + P.left, "e"], P.shut ? ["   CLEAR THE EXIT ROOM", "t"] : ["   THE EXIT IS OPEN", "g"],
+       [touch ? "   STICK + DRAG" : locked() || !lockWorks ? "   WASD + MOUSE" : "   CLICK THE VIEW", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
   const again = P.done && !over ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
   const buttons = over ? [["[ESC] CLOSE", "btn", "esc"]] : [["[L]EDGER", "btn", "l"], ["  ", ""], ["[U]SER", "btn", "u"]];
@@ -209,23 +217,23 @@ function frame(message) {
   setFrame(L.join("\n"));
 }
 
-// 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms of the rails you've walked
+// 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms you've walked
 // through, the ways out of them, and an arrow for the way you face. Drawn by floor.js, 4Dungeon's own minimap code, from
 // the floor as it is (every door a gap, a locked one #), then a + put on every room corner. floor.js draws extra hallways out of room 0 (an irl-dungeon
 // rule), so it is handed the floor with every room number moved up by one.
 function minimap() {
-  const k = Math.min(cor.route.length - 1, Math.round(P.s / C.S)), f = cor.floor, up = (j) => j + 1;
+  const f = cor.floor, up = (j) => j + 1, at = P.seen[P.seen.length - 1];
   const view = {
     rooms: [undefined, ...f.rooms.map((r) => r && { ...r, doors: Object.fromEntries(Object.entries(r.doors).map(([d, j]) => [d, up(j)])) })],
     start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
   };
-  const visited = []; for (const i of cor.route.slice(0, k + 1)) visited[up(i)] = true;
+  const visited = []; for (const i of P.seen) visited[up(i)] = true;
   const { dx, dy } = eye();
   const facing = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "E" : "W") : dy > 0 ? "S" : "N";
-  const rows = FLOOR.minimap(view, { at: up(cor.route[k]), visited, facing }).map((r) => r.split(""));
+  const rows = FLOOR.minimap(view, { at: up(at), visited, facing }).map((r) => r.split(""));
   // every corner of a room you've been in is a +, even next to a door (floor.js draws those as - or |)
-  const here = f.rooms[cor.route[k]];
-  for (const i of cor.route.slice(0, k + 1)) {
+  const here = f.rooms[at];
+  for (const i of P.seen) {
     const row = 2 + (f.rooms[i].r - here.r) * 2, col = 13 + (f.rooms[i].c - here.c) * 4;
     for (const y of [row - 1, row + 1]) for (const x of [col - 1, col + 3]) if (rows[y] && x >= 0 && x < rows[y].length) rows[y][x] = "+";
   }
@@ -246,12 +254,12 @@ function showBanner(lines, secs) {
 }
 
 // ---- play ---------------------------------------------------------------------------------------------------
-// A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, col, row, hit]).
-function shoot(col, row) {
+// A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
+function shoot() {
   if (P.done) return;
   P.flash = 0.08;
   const was = P.streak;
-  const hit = C.fire(P, col, row);
+  const hit = C.fire(P, P.aimY);
   if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
@@ -262,6 +270,7 @@ function shoot(col, row) {
 
 function finish() {
   P.done = C.label(P);
+  if (document.pointerLockElement) document.exitPointerLock();
   endBanner(P.done);
   if (P.practice) P.seal = "PRACTICE MODE. NOT SEALED."; else seal();
 }
@@ -275,9 +284,9 @@ function runItBack() {
 
 function endBanner(kind) {
   const lines = {
-    CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`1v3 ON ${P.hp} HP`, "b"], [`${P.hits} HITS / ${P.shots} SHOTS`, "t"]],
-    TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["YOU WON BY SPRAYING", "b"], ["AND PRAYING.", "b"]],
-    FEED: [["", ""], [" FEED ", "big e"], ["", ""], ["YOU GOT FRAGGED.", "b"], P.left === null ? ["", ""] : [`${P.left} ${P.left === 1 ? "TARGET" : "TARGETS"} STILL STANDING`, "t"]],
+    CLUTCH: [["", ""], [" CLUTCH ", "big g"], ["", ""], [`OUT ON ${P.hp} HP`, "b"], [`${P.hits} HITS / ${P.shots} SHOTS`, "t"]],
+    TILT: [["", ""], [" TILT ", "big g"], ["", ""], ["YOU GOT OUT BY SPRAYING", "b"], ["AND PRAYING.", "b"]],
+    FEED: [["", ""], [" FEED ", "big e"], ["", ""], [P.hp > 0 ? "TIME'S UP. YOU NEVER GOT OUT." : "YOU GOT FRAGGED.", "b"], P.left === null ? ["", ""] : [`${P.left} ${P.left === 1 ? "TARGET" : "TARGETS"} STILL STANDING`, "t"]],
   }[kind];
   lines.push(["", ""]);
   showBanner(lines, Infinity);
@@ -287,13 +296,13 @@ function endBanner(kind) {
 // seals what it got; if that isn't what this page got, the page shows the server's.
 function seal() {
   P.seal = "SEALING...";
-  const run = { day, shots: P.log.map((s) => s.slice(0, 3)) };
+  const run = { day, inputs: P.log.map((s) => s.slice(0, 3)) };
   fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(run) })
     .then(async (r) => [r.ok, await r.json()])
     .then(([ok, b]) => {
       if (!ok) { P.seal = "NOT SEALED."; say(b.error || "SERVER SAYS NO.", "e"); return; }
       P.seal = `SEALED: LEDGER ENTRY #${b.run.entry}`;
-      if (b.run.hits !== P.hits || b.run.hp !== P.hp || b.run.shots !== P.shots) {
+      if (b.run.hits !== P.hits || b.run.hp !== P.hp || b.run.shots !== P.shots || b.run.label !== P.done) {
         Object.assign(P, { hp: b.run.hp, shots: b.run.shots, hits: b.run.hits, done: b.run.label });
         say(`SERVER REPLAY: ${b.run.label}, ${b.run.hits} HITS / ${b.run.shots} SHOTS.`, "g"); endBanner(b.run.label);
       }
@@ -305,16 +314,16 @@ function seal() {
 // Today's run is already sealed: show it, and no new run until tomorrow's corridor.
 function showSealed(run) {
   build();
-  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, kills: run.label === "FEED" ? null : enemies.length, left: null, script: [], phase: "clutch", done: run.label,
+  Object.assign(P, { hp: run.hp, shots: run.shots, hits: run.hits, kills: null, left: null, over: true, done: run.label,
                      seal: `TODAY'S RUN IS SEALED: ENTRY #${run.entry}` });
-  enemies.forEach((e) => e.state = "dead"); squad.forEach((m) => m.dead = true);
+  enemies.forEach((e) => e.state = "dead");
   say(`Sealed as ledger entry #${run.entry} (${run.hash.slice(0, 8)}). Next corridor at midnight UTC.`, "b");
   endBanner(run.label);
 }
 
 // One frame: the page's own easing and timers, then as many of the engine's fixed ticks as the time that passed holds.
 function step(dt) {
-  P.gx += (P.aim - P.gx) * Math.min(1, dt * 14); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
+  P.sway -= P.sway * Math.min(1, dt * 8); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   if (P.done) return;
@@ -322,8 +331,16 @@ function step(dt) {
     for (const ev of C.tick(P)) if (ev === "hurt") {
       P.hurt = 0.25; say("ENEMY tagged YOU", "e");
       if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
+    } else if (ev === "open") say("THE EXIT IS OPEN", "g");
+    const r = C.roomOf(cor, P.x, P.y);
+    if (r >= 0 && r !== P.seen[P.seen.length - 1]) { P.seen = P.seen.filter((i) => i !== r).concat(r); }
+    // what the ghosts did on this tick of their runs
+    for (const m of squad) {
+      const g = m.track[P.tick - 1], was = m.track[P.tick - 2];
+      if (!g || !was) continue;
+      if (g.k > was.k) say(`${m.n} fragged ENEMY`, "h");
+      if (g.over && !was.over) say(g.out ? `${m.n} got out` : `${m.n} was fragged`, g.out ? "h" : "e");
     }
-    while (P.script.length && P.script[0][0] <= P.tick) P.script.shift()[1]();
     if (P.over) finish();
   }
   P.jit = C.jit(P);
@@ -339,12 +356,85 @@ function loop(ts) {
   render(); frame();
 }
 
+// ---- input --------------------------------------------------------------------------------------------------
+// Walking is the keys held (W A S D, or the touch stick), sent to the engine as a set of bits when they change
+// (corridor.js press). Turning is the mouse moving left and right (or a drag on the right half of the view on a phone),
+// sent as whole TURN units (corridor.js turn). Moving it up and down moves the crosshair up and down (it's not sent: a
+// shot carries its row). On a computer, a click on the view captures the mouse (pointer lock; Esc lets it go), and
+// from then on a click shoots. Where pointer lock isn't allowed, the mouse still turns you as it crosses the view.
 const view = $("view");
-// where the pointer is, in the view's half-size character cells
-const aimAt = (ev) => { const r = view.getBoundingClientRect(); P.aim = Math.max(0, Math.min(W - 1, (ev.clientX - r.left) / r.width * W)); P.aimY = Math.max(1, Math.min(C.AIM_MAX_Y, (ev.clientY - r.top) / r.height * H)); };   // the crosshair stays above the gun
-// on the whole game, not just the view: a message box sits over the view and would swallow the pointer moving across it
-$("game").addEventListener("pointermove", (ev) => { if (P) aimAt(ev); });
-view.addEventListener("pointerdown", (ev) => { if (!P) return; ev.preventDefault(); aimAt(ev); shoot(P.aim, P.aimY); });
+const KEYS = { w: 1, s: 2, a: 4, d: 8 };
+const TURN_PX = 1, TURN_TOUCH = 4, AIMY_PX = 0.03, AIMY_TOUCH = 0.1;   // turn units, and crosshair rows, per pixel
+let held = 0, stick = 0, turnLeft = 0, touch = false, lockWorks = true;
+const locked = () => document.pointerLockElement === view;
+const canPlay = () => P && !P.done && !userOpen() && !ledgerOpen();
+const sendKeys = () => { if (P) C.press(P, canPlay() ? held | stick : 0); };
+function look(dx, dy, perPx, perRow) {
+  if (!canPlay()) return;
+  turnLeft += dx * perPx;
+  const d = Math.trunc(turnLeft);
+  if (d) { turnLeft -= d; C.turn(P, d); P.sway = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway - d * 0.04)); }
+  P.aimY = Math.max(1, Math.min(C.AIM_MAX_Y, P.aimY + dy * perRow));   // the crosshair stays above the gun
+}
+
+// The first move after the mouse is taken or let go can carry the whole jump from where the pointer was (Chrome does
+// this), so it's skipped, as is any single move of more than 400 pixels.
+let skipMove = false;
+addEventListener("pointermove", (ev) => {
+  if (ev.pointerType === "touch" || !P) return;
+  if (skipMove || Math.abs(ev.movementX) > 400 || Math.abs(ev.movementY) > 400) { skipMove = false; return; }
+  if (locked() || (!lockWorks && view.contains(ev.target))) look(ev.movementX, ev.movementY, TURN_PX, AIMY_PX);
+});
+document.addEventListener("pointerlockchange", () => { skipMove = true; });
+document.addEventListener("pointerlockerror", () => { lockWorks = false; });
+view.addEventListener("pointerdown", (ev) => {
+  if (!P) return;
+  ev.preventDefault();
+  // preventDefault stops the click from focusing the page, so W A S D would go to whatever had focus (the page around
+  // it, when the game is in a frame): focus the view by hand
+  window.focus(); view.focus({ preventScroll: true });
+  if (ev.pointerType === "touch") return touchDown(ev);
+  touch = false;
+  if (!locked() && lockWorks && canPlay()) {
+    const p = view.requestPointerLock();
+    if (p && p.catch) p.catch(() => { lockWorks = false; });
+    return;
+  }
+  shoot();
+});
+
+// Phones: a thumb down on the left half of the view is a stick (drag it to walk), on the right half it turns and aims
+// as it drags, and a quick tap there shoots.
+const pads = new Map();
+function touchDown(ev) {
+  touch = true;
+  const r = view.getBoundingClientRect(), left = ev.clientX - r.left < r.width / 2;
+  pads.set(ev.pointerId, { left, x0: ev.clientX, y0: ev.clientY, x: ev.clientX, y: ev.clientY, t: performance.now(), moved: 0 });
+  try { view.setPointerCapture(ev.pointerId); } catch {}   // keeps the drag ours if the thumb slides off the view
+}
+view.addEventListener("pointermove", (ev) => {
+  const p = pads.get(ev.pointerId);
+  if (!p) return;
+  const dx = ev.clientX - p.x, dy = ev.clientY - p.y;
+  p.x = ev.clientX; p.y = ev.clientY; p.moved += Math.abs(dx) + Math.abs(dy);
+  if (p.left) {
+    const sx = p.x - p.x0, sy = p.y - p.y0, dead = 12;
+    stick = (sy < -dead ? 1 : 0) | (sy > dead ? 2 : 0) | (sx < -dead ? 4 : 0) | (sx > dead ? 8 : 0);
+    sendKeys();
+  } else look(dx, dy, TURN_TOUCH, AIMY_TOUCH);
+});
+function touchUp(ev) {
+  const p = pads.get(ev.pointerId);
+  if (!p) return;
+  pads.delete(ev.pointerId);
+  if (p.left) { stick = 0; sendKeys(); }
+  else if (p.moved < 10 && performance.now() - p.t < 300) shoot();
+}
+view.addEventListener("pointerup", touchUp);
+view.addEventListener("pointercancel", touchUp);
+
+addEventListener("keyup", (ev) => { const b = KEYS[ev.key.toLowerCase()]; if (b) { held &= ~b; sendKeys(); } });
+addEventListener("blur", () => { held = 0; stick = 0; sendKeys(); });
 // a click on a message box closes it (and isn't a shot)
 $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 
@@ -355,15 +445,19 @@ setupLedger();
 $("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); });
 addEventListener("keydown", (ev) => {
   if (userOpen() || ledgerOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
-  if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); }
-  else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); }
+  const b = KEYS[ev.key.toLowerCase()];
+  if (b) { ev.preventDefault(); held |= b; sendKeys(); return; }
+  // a panel covers the view: let the mouse go and stop walking
+  const panel = () => { if (locked()) document.exitPointerLock(); held = 0; sendKeys(); };
+  if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); panel(); }
+  else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); panel(); }
   else if ((ev.key === "r" || ev.key === "R") && P.done) { ev.preventDefault(); runItBack(); }
 });
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
-  day = t.day; SEED = t.seed; myName = t.name;
+  day = t.day; SEED = t.seed; myName = t.name; GHOSTS = t.ghosts || [];
   if (t.run) showSealed(t.run); else build();
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
