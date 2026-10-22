@@ -1,6 +1,6 @@
 # Working notes for clutch-feed-tilt
 
-CLUTCH FEED TILT: a daily ASCII corridor shooter. One corridor per UTC day, the same for everyone; your run is labelled CLUTCH, FEED or TILT. Rules doc: the Claude Doc "CLUTCH FEED TILT: rules" (https://claude.ai/artifact/LeYcKUbq78EKJfsaYQwX4H).
+TILT.EXE (repo, Worker, D1, ledger and registry ids stay `clutch-feed-tilt`/`cft`; the player-facing name was CLUTCH FEED TILT until v0.10.1): a daily ASCII corridor shooter. One corridor per UTC day, the same for everyone; your run is labelled CLUTCH, FEED or TILT. Rules doc: the Claude Doc "CLUTCH FEED TILT: rules" (https://claude.ai/artifact/LeYcKUbq78EKJfsaYQwX4H).
 
 - **Push only when the user says to.** Once the Worker is connected to this repo, a push to `main` is a release.
 - **The rules live in one file**, `public/engine/corridor.js`, loaded by the page and the tests. Change a rule there, once.

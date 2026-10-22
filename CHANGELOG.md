@@ -1,8 +1,13 @@
-# CLUTCH FEED TILT Changelog
+# TILT.EXE Changelog
 
 Newest first. Times are Hawaii time (HST).
 
 ---
+
+## v0.10.1 — "TILT.EXE"
+**Wed Oct 21, 2026 · 2:25 PM HST**
+
+- The game is called TILT.EXE: the page title, the name at the top of the screen and the save code file (now `tilt-exe-save-code.txt`). Removed: the name CLUTCH FEED TILT. Your runs are still called CLUTCH, FEED or TILT, and your save codes, runs and ledger are unchanged.
 
 ## v0.10 — "Double Tap"
 **Wed Oct 21, 2026 · 1:50 PM HST**

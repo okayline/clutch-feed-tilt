@@ -1,5 +1,5 @@
 {
-  // CLUTCH FEED TILT. The Worker's name must match the one in the Cloudflare dashboard.
+  // TILT.EXE. The Worker's name must match the one in the Cloudflare dashboard.
   "name": "clutch-feed-tilt",
   "main": "src/worker.js",
   "compatibility_date": "2026-10-01",
