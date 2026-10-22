@@ -4,6 +4,14 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.11.1 — "Drones"
+**Wed Oct 21, 2026 · 2:40 PM HST**
+
+- A shot hits only what's drawn: the gap between an enemy's legs and the space beside its head miss. Removed: the box round each enemy, with a spare cell all round it, that any shot inside hit.
+- Where you hit matters. The middle of the top of the head drops an enemy in one shot. The rest of the head then a body shot is a double tap. Three chest shots drop it, and a leg shot does half a chest shot ("YOU tagged ENEMY in the leg"). Removed: every body shot doing the same, legs included.
+- Three kinds of enemy, in turn: short and fat, tall and skinny with its gun on the left, and a small drone hovering at head height with spinning rotors. Only the drone's middle O can be hit, and one hit drops it. Removed: one size of enemy for everyone.
+- Enemies glitch: a few of their characters keep scrambling into 4Dungeon's glyphs, the drone's a little less. It's only how they look, and a shot still hits the real shape. Removed: enemies drawn plain.
+
 ## v0.11 — "Free Roam"
 **Wed Oct 21, 2026 · 2:30 PM HST**
 
