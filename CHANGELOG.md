@@ -4,6 +4,15 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.17.0 — "Melt"
+**Wed Oct 21, 2026 · 4:54 PM HST**
+
+- Dying, after Doom's (p_user.c P_DeathThink): your view sinks to the floor, red, the gun drops away and you turn toward the nearest enemy; a beat lying there; then the view melts down onto F R A G G E D at half speed; FRAGGED holds, fades to black, a beat on black, and the FEED banner fades in over 1.2 s. The mouse comes back only once the banner is in. Removed: the FEED banner straight away when you died, and the mouse let go at once.
+- The screen melt (Doom's f_wipe.c, digital): the old picture slides down off the view in strips that each start at their own time and speed up, with a red glitch band at each strip's top edge. It runs when the corridor first shows (off a title card: T I L T . E X E, the day and the level), on Run It Back (off your last frame), when you get out (onto Y O U   G O T   O U T) and when you die. The fight waits while it runs. Removed: the corridor and new runs appearing at once.
+- All of it is drawing only (no rule changes; replays and sealed runs are unchanged), and none of it plays with Reduce Motion on.
+
+---
+
 ## v0.16.0 — "Gibs"
 **Wed Oct 21, 2026 · 4:39 PM HST**
 
