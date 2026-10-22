@@ -70,9 +70,47 @@ const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t
 // nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
 // close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
 // underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
-const FALL = 0.8, MELT_AT = 1.0, MELT = 1.5, DEATH_END = MELT_AT + MELT + 0.2, SINK = 0.42;
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42;   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
 const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
+// The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
+// its own short delay with its neighbours close behind, uncovering the new one; digital here, with a band of red glitch
+// along each column's top edge. Used when the corridor first shows (off a title card), on Run It Back (off the last
+// frame), when you get out (onto YOU GOT OUT) and when you die (onto FRAGGED). The fight waits while it runs. Drawing only;
+// skipped with Reduce Motion.
+let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live view), t, d (each column's delay), then }
+const MELT_SPEED = H / 1.1;   // rows a second
+function meltDelays() {
+  const d = [];
+  for (let x = 0, v = Math.random() * 0.2; x < W; x++) { v = Math.max(0, Math.min(0.35, v + (Math.random() - 0.5) * 0.05)); d.push(v); }
+  return d;
+}
+function card(lines) {   // [[text, class], ...] centred down the middle of a blank view
+  const c = { ch: Array.from({ length: H }, () => new Array(W).fill(" ")), cl: Array.from({ length: H }, () => new Array(W).fill("")) };
+  lines.forEach(([t, k], i) => { const y = Math.floor(H / 2 - lines.length / 2) + i, x0 = Math.floor(W / 2 - t.length / 2); [...t].forEach((ch, j) => { c.ch[y][x0 + j] = ch; c.cl[y][x0 + j] = ch === " " ? "" : k; }); });
+  return c;
+}
+function startWipe(old, cardOf, then, speed = MELT_SPEED) {
+  if (reduced) { if (then) then(); return; }
+  wipe = { oldCh: old && old.ch, oldCl: old && old.cl, card: cardOf, t: 0, d: meltDelays(), then, speed };
+}
+const snapshot = () => ({ ch: ch.map((r) => r.slice()), cl: cl.map((r) => r.slice()) });
+// draw the melt over what render() put in ch and cl; true when every column is off the bottom
+function drawWipe() {
+  if (!wipe.oldCh) Object.assign(wipe, { oldCh: snapshot().ch, oldCl: snapshot().cl });   // melt the view as it is now
+  const nu = wipe.card || snapshot(), g = Math.floor(wipe.t * C.FPS);
+  let done = true;
+  for (let x = 0; x < W; x++) {
+    const o = Math.max(0, Math.floor((wipe.t - wipe.d[x]) * wipe.speed));
+    if (o < H) done = false;
+    for (let y = 0; y < H; y++) {
+      if (y >= o) { ch[y][x] = wipe.oldCh[y - o][x]; cl[y][x] = wipe.oldCl[y - o][x]; }
+      else if (y >= o - 2) { ch[y][x] = GLITCH_GLYPHS[Math.floor(noise(x, y, g) * GLITCH_GLYPHS.length)]; cl[y][x] = "e"; }
+      else { ch[y][x] = nu.ch[y][x]; cl[y][x] = nu.cl[y][x]; }
+    }
+  }
+  return done;
+}
 const eyeH = () => dying() ? 0.5 - SINK * Math.min(1, P.deathT / FALL) ** 0.6 : 0.5;   // how high your eye is off the floor, in wall heights
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
@@ -224,28 +262,8 @@ function render() {
   }
   GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
-  if (dying()) {
-    // red while you fall
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";
-    // then the melt: each column slides down MELT_ROWS a second after its delay, a red glitch band at its top edge, and
-    // FRAGGED revealed underneath
-    const mt = P.deathT - MELT_AT;
-    if (mt > 0) {
-      const under = Array.from({ length: H }, () => new Array(W).fill(" ")), word = "F R A G G E D", wy = Math.floor(H / 2) - 1;
-      [...word].forEach((c, i) => { under[wy][Math.floor(W / 2 - word.length / 2) + i] = c; });
-      const t = Math.floor(P.tick / GLITCH_HOLD) + Math.floor(P.deathT * C.FPS);
-      for (let x = 0; x < W; x++) {
-        const o = Math.max(0, Math.floor((mt - P.melt[x]) * H / (MELT * 0.75)));
-        if (!o) continue;
-        const col = ch.map((row) => row[x]), cc = cl.map((row) => row[x]);
-        for (let y = 0; y < H; y++) {
-          if (y >= o) { ch[y][x] = col[y - o]; cl[y][x] = cc[y - o]; }
-          else if (y >= o - 2) { ch[y][x] = GLITCH_GLYPHS[Math.floor(noise(x, y, t) * GLITCH_GLYPHS.length)]; cl[y][x] = "e"; }
-          else { ch[y][x] = under[y][x]; cl[y][x] = under[y][x] !== " " ? "e" : ""; }
-        }
-      }
-    }
-  }
+  if (dying()) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";   // red while you fall
+  if (wipe && drawWipe()) wipe.done = true;
   let out = "";
   for (let y = 0; y < H; y++) {
     let run = "", k = cl[y][0];
@@ -407,7 +425,8 @@ function finish() {
 
 // After the run is over: play today's corridor again, as practice. It's never sent, so today's sealed run stays.
 function runItBack() {
-  build(); P.practice = true;
+  const old = snapshot();
+  build(); P.practice = true; startWipe(old);
   $("banner").hidden = true; bannerT = 0;
   say("PRACTICE MODE: this one doesn't count. Your sealed run stays.", "t");
 }
@@ -459,13 +478,18 @@ function step(dt) {
   P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
+  if (wipe) {   // the fight waits while the screen melts
+    wipe.t += dt; lag = 0;
+    if (wipe.done) { const then = wipe.then; wipe = null; if (then) then(); }
+    if (!P.done && !dying()) return;
+  }
   if (P.done) return;
   if (dying()) {
     P.deathT += dt;
     const tgt = P.killer ? Math.atan2(P.killer.y - P.y, P.killer.x - P.x) : P.viewA;   // turn to face them, 75 degrees a second
     let dA = tgt - P.viewA; dA -= Math.round(dA / (2 * Math.PI)) * 2 * Math.PI;
     P.viewA += Math.sign(dA) * Math.min(Math.abs(dA), 75 * Math.PI / 180 * dt);
-    if (P.deathT >= DEATH_END) finish();
+    if (P.deathT >= MELT_AT && !wipe && !P.melting) { P.melting = true; startWipe(null, card([["F R A G G E D", "e"]]), finish, MELT_SPEED / 2); }
     return;
   }
   for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
@@ -487,9 +511,9 @@ function step(dt) {
       if (P.hp <= 0 && !reduced) {   // dying: fall, then melt (above), then finish
         P.deathT = 0; P.viewA = P.a * 2 * Math.PI / C.TURN;
         P.killer = enemies.filter((e) => e.state === "out").sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y))[0];
-        P.melt = []; for (let x = 0, d = Math.random() * 0.2; x < W; x++) { d = Math.max(0, Math.min(0.35, d + (Math.random() - 0.5) * 0.05)); P.melt.push(d); }
         break;
       }
+      if (P.escaped) { startWipe(null, card([["Y O U   G O T   O U T", "b"]]), finish); break; }
       finish();
     }
   }
@@ -608,6 +632,7 @@ addEventListener("keydown", (ev) => {
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
   day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
-  if (t.run) showSealed(t.run); else build();
+  if (t.run) showSealed(t.run);
+  else { build(); const lv = C.level(day); startWipe(card([["T I L T . E X E", "b"], ["", ""], [`${day}  4DUNGEON ${lv.name} WING ${WING}`, "t"]])); }
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
