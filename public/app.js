@@ -409,9 +409,12 @@ function shoot() {
   const was = P.streak;
   const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
   const hit = C.fire(P, P.aimY);
-  gib(hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0));   // one chunk per point of damage: legs 1, chest 2, head 4, crown 5, a drone's O 6
-  if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
+  const dmg = hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0), crown = (hit === "head" || hit === "headkill") && dmg === C.CROWN_DMG;
+  gib(dmg);   // one chunk per point of damage: legs 1, chest 2, head 4, crown 8, a drone's O 6
+  // HEADSHOT!! only for a kill on the crown; a kill with a plain head hit is just a frag
+  if (hit === "headkill") { P.left--; say(crown ? "HEADSHOT!! YOU fragged ENEMY" : "YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
+  else if (crown) say("CROWN! YOU cracked ENEMY", "b");
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
   else if (hit === "body") say("YOU tagged ENEMY", "t");
   else if (hit === "leg") say("YOU tagged ENEMY in the leg", "t");
