@@ -66,7 +66,14 @@ const SPIN_TICKS = 3;   // a drone's rotors turn every 3 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = { short: 0.25, tall: 0.25, drone: 0.1 }, GLITCH_HOLD = 2;   // a drone glitches less; a scrambled glyph stays 2 frames
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
 const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t * 2246822519, 3266489917); h ^= h >>> 15; h = Math.imul(h, 2654435761); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
-const eye = () => C.eyeOf(P);
+// Dying, as Doom does it (p_user.c P_DeathThink, "fall on your face"): the view sinks to the floor and turns to face the
+// nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
+// close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
+// underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
+const FALL = 0.8, MELT_AT = 1.0, MELT = 1.5, DEATH_END = MELT_AT + MELT + 0.2, SINK = 0.42;
+const dying = () => P && P.deathT !== undefined;
+const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
+const eyeH = () => dying() ? 0.5 - SINK * Math.min(1, P.deathT / FALL) ** 0.6 : 0.5;   // how high your eye is off the floor, in wall heights
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
@@ -79,7 +86,7 @@ function render() {
   // the camera: where you stand, the way you face. Each column looks COL further round than the one to its left and the
   // walls are as tall as they are near, not as the ray is deep, so turning slides the picture sideways and changes
   // nothing else: 15 degrees moves it exactly 21 columns.
-  const E = eye(), { x: px, y: py } = E;
+  const E = eye(), { x: px, y: py } = E, EH = eyeH();
   // Walls are outlines, as 4Dungeon draws them (daily-dungeon screen.js renderView), with no horizontal lines: a wall's
   // top and bottom edges are a \ or / where they slope away from you and nothing where they run flat, an upright |
   // marks every corner (where one flat stretch of wall meets another, or ends against one further away), and a wall
@@ -102,7 +109,7 @@ function render() {
     // its top and bottom, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you
     // narrows away. A wall is TALL times as high as you see from the floor up to your eye and back down, standing on the
     // same floor as the enemies (corridor.js enemyBox), so it rises above you to the ceiling.
-    h.t = H / 2 - (TALL - 0.5) * H / Math.max(0.3, d); h.b = H / 2 + 0.5 * H / Math.max(0.3, d);
+    h.t = H / 2 - (TALL - EH) * H / Math.max(0.3, d); h.b = H / 2 + EH * H / Math.max(0.3, d);
     hits.push(h);
   }
   // are columns x and x + 1 on the same stretch of wall?
@@ -146,13 +153,13 @@ function render() {
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
-      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
+      const rd = EH * H / (y + 0.5 - H / 2); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
     // the ceiling: the same lines, overhead, where the walls' tops meet it
     for (let y = Math.min(top, H / 2 - 1) - 1; y >= 0; y--) {
-      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
+      const rd = (TALL - EH) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
@@ -166,7 +173,8 @@ function render() {
   const wipeOf = (e) => e.diedAt === undefined ? -1 : (P.tick - e.diedAt) / (WIPE * C.FPS);
   const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
     .map((e) => [e, wipeOf(e) >= 1 ? null : C.enemyBox(E, wipeOf(e) >= 0 ? { ...e, state: "out" } : e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
-  for (const [e, b] of vis) {
+  for (const [e, b0] of vis) {
+    const lift = Math.round((0.5 - EH) * H / b0["ry"]), b = lift ? { ...b0, top: b0.top - lift, bot: b0.bot - lift } : b0;   // a lower eye sees them higher
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
@@ -194,7 +202,7 @@ function render() {
   } });
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
-  if (!P.done) {
+  if (!P.done && !dying()) {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
@@ -202,7 +210,7 @@ function render() {
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
   const rf = reloadFrame();
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf];
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf] + (dying() ? Math.round(Math.min(1, P.deathT / FALL) * (GUN.length + 1)) : 0);
   // reloading: two frames. First the gun swings off to the right and drops 4 rows, the grip empty, and the old magazine
   // falls away on its left; then it comes halfway back, 2 rows down, with a full magazine coming up on its left. RELOADING
   // blinks above it the whole time.
@@ -216,6 +224,28 @@ function render() {
   }
   GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
+  if (dying()) {
+    // red while you fall
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";
+    // then the melt: each column slides down MELT_ROWS a second after its delay, a red glitch band at its top edge, and
+    // FRAGGED revealed underneath
+    const mt = P.deathT - MELT_AT;
+    if (mt > 0) {
+      const under = Array.from({ length: H }, () => new Array(W).fill(" ")), word = "F R A G G E D", wy = Math.floor(H / 2) - 1;
+      [...word].forEach((c, i) => { under[wy][Math.floor(W / 2 - word.length / 2) + i] = c; });
+      const t = Math.floor(P.tick / GLITCH_HOLD) + Math.floor(P.deathT * C.FPS);
+      for (let x = 0; x < W; x++) {
+        const o = Math.max(0, Math.floor((mt - P.melt[x]) * H / (MELT * 0.75)));
+        if (!o) continue;
+        const col = ch.map((row) => row[x]), cc = cl.map((row) => row[x]);
+        for (let y = 0; y < H; y++) {
+          if (y >= o) { ch[y][x] = col[y - o]; cl[y][x] = cc[y - o]; }
+          else if (y >= o - 2) { ch[y][x] = GLITCH_GLYPHS[Math.floor(noise(x, y, t) * GLITCH_GLYPHS.length)]; cl[y][x] = "e"; }
+          else { ch[y][x] = under[y][x]; cl[y][x] = under[y][x] !== " " ? "e" : ""; }
+        }
+      }
+    }
+  }
   let out = "";
   for (let y = 0; y < H; y++) {
     let run = "", k = cl[y][0];
@@ -352,7 +382,7 @@ function gib(n) {
 }
 
 function shoot() {
-  if (P.done || P.reload > 0) return;
+  if (P.done || dying() || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
   const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
@@ -430,6 +460,14 @@ function step(dt) {
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   if (P.done) return;
+  if (dying()) {
+    P.deathT += dt;
+    const tgt = P.killer ? Math.atan2(P.killer.y - P.y, P.killer.x - P.x) : P.viewA;   // turn to face them, 75 degrees a second
+    let dA = tgt - P.viewA; dA -= Math.round(dA / (2 * Math.PI)) * 2 * Math.PI;
+    P.viewA += Math.sign(dA) * Math.min(Math.abs(dA), 75 * Math.PI / 180 * dt);
+    if (P.deathT >= DEATH_END) finish();
+    return;
+  }
   for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
     for (const ev of C.tick(P)) if (ev === "hurt") {
       P.hurt = 0.25; say("ENEMY tagged YOU", "e");
@@ -445,7 +483,15 @@ function step(dt) {
       if (g.k > was.k) say(`${m.n} fragged ENEMY`, "h");
       if (g.over && !was.over) say(g.out ? `${m.n} got out` : `${m.n} was fragged`, g.out ? "h" : "e");
     }
-    if (P.over) finish();
+    if (P.over) {
+      if (P.hp <= 0 && !reduced) {   // dying: fall, then melt (above), then finish
+        P.deathT = 0; P.viewA = P.a * 2 * Math.PI / C.TURN;
+        P.killer = enemies.filter((e) => e.state === "out").sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y))[0];
+        P.melt = []; for (let x = 0, d = Math.random() * 0.2; x < W; x++) { d = Math.max(0, Math.min(0.35, d + (Math.random() - 0.5) * 0.05)); P.melt.push(d); }
+        break;
+      }
+      finish();
+    }
   }
   P.jit = C.jit(P);
 }
