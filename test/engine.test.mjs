@@ -130,7 +130,7 @@ function faceFirst(cor) {
   throw new Error("no enemy came out");
 }
 
-test("the hitbox is the drawn figure, no spare cell; the crown is the middle 3 of the head's top row", () => {
+test("the hitbox is the drawn figure, no spare cell; the crown is the middle 1 of the head's top row (2 if it's even)", () => {
   // a box about 3 tiles away, worked by hand from cell()'s fractions: 14 wide (u = (c - 40) / 14), 9 tall (f = (r - 14) / 9)
   const b = { l: 40, rr: 54, top: 14, bot: 23, sh: 9, kind: "short" };
   // head: f < 0.22 is rows 14-15, |u - 0.5| < 0.2 is cols 45-49; chest rows 16-19 cols 42-52; gun row 17 col 53;
@@ -139,26 +139,29 @@ test("the hitbox is the drawn figure, no spare cell; the crown is the middle 3 o
   assert.deepEqual([C.cell(b, 42, 16), C.cell(b, 53, 17), C.cell(b, 43, 21), C.cell(b, 51, 21)], ["#", "=", "|", "|"]);
   assert.deepEqual([C.cell(b, 47, 21), C.cell(b, 44, 14), C.cell(b, 47, 13), C.cell(b, 41, 16), C.cell(b, 47, 23)], ["", "", "", "", ""],
     "leg gap, beside the head, above it, beside the chest, below the feet: all miss");
-  assert.deepEqual([44, 45, 46, 47, 48, 49, 50].map((c) => C.onCrown(b, c, 14)), [false, false, true, true, true, false, false]);
+  assert.deepEqual([44, 45, 46, 47, 48, 49, 50].map((c) => C.onCrown(b, c, 14)), [false, false, false, true, false, false, false]);
   assert.equal(C.onCrown(b, 47, 15), false, "the head's second row is not crown");
-  // far away the head is 3 or fewer wide, so all of its top row is crown (6 tiles away):
+  // 6 tiles away the head is 3 wide (cols 46-48): its middle one is crown
   const f = { l: 44, rr: 50, top: 15, bot: 20, sh: 4.5, kind: "short" };   // u = (c - 44) / 6: |u - 0.5| < 0.2 is cols 46-48
-  assert.deepEqual([45, 46, 47, 48, 49].map((c) => C.onCrown(f, c, 15)), [false, true, true, true, false]);
-  // a bat, 10 wide (u = (c - 40) / 10), 6 tall (f = (r - 10) / 6): its O is f 1/3 to 2/3 (rows 12-13), |u - 0.5| < 0.12
-  // (cols 44-46), the same on either flap; its wings are drawn but not in DMG
-  const bat = { l: 40, rr: 50, top: 10, bot: 16, sh: 6, kind: "bat" };
-  for (const flap of [0, 1]) assert.deepEqual([43, 44, 46, 47].map((c) => C.cell(bat, c, 12, flap)), [flap ? "\\" : "/", "O", "O", flap ? "/" : "\\"]);
-  assert.deepEqual([C.cell(bat, 45, 11), C.cell(bat, 45, 14)], ["^", ""], "its ears above the O (wings up), nothing below");
-  assert.equal(C.cell(bat, 41, 10, 0), "/");
-  assert.equal(C.DMG[C.cell(bat, 41, 10, 0)], undefined, "a wing is not a hit");
+  assert.deepEqual([45, 46, 47, 48, 49].map((c) => C.onCrown(f, c, 15)), [false, false, true, false, false]);
+  // a head 6 wide (u = (c - 40) / 13, |u - 0.5| < 0.2 is cols 44-49): the middle 2 (46, 47) are crown
+  const even = { l: 40, rr: 53, top: 5, bot: 12, sh: 7, kind: "short" };
+  assert.deepEqual([43, 44, 45, 46, 47, 48, 49].map((c) => C.onCrown(even, c, 5)), [false, false, false, true, true, false, false]);
+  // a drone, 10 wide and 6 tall: its middle is col 44.5, half its width 5, its core 1 either side (cols 44-45);
+  // f = (r - 10) / 6, so rows 10-11 are rotors, 12-13 the core, 14-15 the legs
+  const dr = { l: 40, rr: 50, top: 10, bot: 16, sh: 6, kind: "drone" };
+  for (const spin of [0, 1, 2]) assert.deepEqual([41, 42, 43, 44, 45, 46, 47, 48].map((c) => C.cell(dr, c, 12, spin)), ["-", "-", "[", "O", "O", "]", "-", "-"]);
+  assert.deepEqual([44, 45, 43, 40].map((c) => C.cell(dr, c, 10)), [":", ":", "", "-"], "the mast, a gap, then the rotor out to the edge");
+  assert.deepEqual([42, 43, 44, 46, 47].map((c) => C.cell(dr, c, 14)), ["/", "/", "", "\\", "\\"]);
+  assert.deepEqual(["-", "~", ":", "[", "]", "/", "\\"].map((p) => C.DMG[p]), [undefined, undefined, undefined, undefined, undefined, undefined, undefined], "only the O is a hit");
 });
 
-test("short, tall, bat in turn; a bat dies to one hit on its O; a short one: the leg gap misses, 3 chest shots, a double tap, a crown shot", () => {
-  assert.deepEqual(C.corridor(12345, "2026-10-21").enemies.map((e) => e.kind), ["short", "tall", "bat", "short", "tall"]);
+test("short, tall, drone in turn; a drone dies to one hit on its O; a short one: the leg gap misses, 3 chest shots, a double tap, a crown shot", () => {
+  assert.deepEqual(C.corridor(12345, "2026-10-21").enemies.map((e) => e.kind), ["short", "tall", "drone", "short", "tall"]);
   const rows = (b, part) => { const out = []; for (let r = b.top; r < b.bot; r++) if (C.cell(b, Math.round(C.AIM), r) === part) out.push(r); return out; };
-  const [B, bat, batBox] = faceFirst(C.corridor(12345, "2026-10-21"));
-  assert.equal(bat.kind, "bat", "the first one out on this map");
-  assert.deepEqual([C.fire(B, batBox.top), C.fire(B, rows(batBox, "O")[0]), bat.state], ["miss", "kill", "dying"], "its ears miss, its O drops it");
+  const [B, dr, drBox] = faceFirst(C.corridor(12345, "2026-10-21"));
+  assert.equal(dr.kind, "drone", "the first one out on this map");
+  assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "kill", "dying"], "its mast misses, its O drops it");
   const shorts = () => { const cor = C.corridor(12345, "2026-10-21"); cor.enemies.forEach((e) => e.kind = "short"); return faceFirst(cor); };
   const [R, a, box] = shorts(), chest = rows(box, "#")[0];
   assert.equal(C.fire(R, box.bot - 1), "miss", "the middle column between the legs");

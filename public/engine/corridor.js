@@ -203,7 +203,7 @@ const REACT_TICKS = 6;                // and once it loses sight of you, it wait
 const DIE_TICKS = 8;
 // What a hit takes off an enemy, by the part of it hit (cell()): the chest and gun drop it in 3, a headshot then a chest
 // shot (a double tap) drops it, the crown (onCrown) drops it at once, the legs take half a chest shot, and one hit on a
-// bat's O drops it.
+// drone's O drops it.
 export const ENEMY_HP = 6, CROWN_DMG = 6, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())
@@ -262,11 +262,11 @@ function sees(R, e) {
 // is off the floor, in tiles; 0 stands on it). The shape inside the box is cell()'s.
 //   short   short and fat
 //   tall    tall and skinny
-//   bat     small, hovering at head height, flapping; only its middle O can be hit
+//   drone   small, hovering at head height, rotors spinning; only its middle O can be hit
 // A ghost teammate (the page's) is drawn as the one size every enemy had before there were kinds.
-export const KINDS = ["short", "tall", "bat"];
-const BUILD = { short: { h: 0.66, w: 0.62, up: 0 }, tall: { h: 0.92, w: 0.4, up: 0 }, bat: { h: 0.24, w: 0.4, up: 0.52 }, ghost: { h: 0.8, w: 0.5, up: 0 } };
-const BAT_ROWS = 4;   // a bat is never less than 4 rows tall, so its O (the middle third) is always a row, on its middle one
+export const KINDS = ["short", "tall", "drone"];
+const BUILD = { short: { h: 0.66, w: 0.62, up: 0 }, tall: { h: 0.92, w: 0.4, up: 0 }, drone: { h: 0.24, w: 0.4, up: 0.52 }, ghost: { h: 0.8, w: 0.5, up: 0 } };
+const DRONE_ROWS = 4;   // a drone is never less than 4 rows tall, so its O (the middle third) is always a row, on its middle one
 
 // Where an enemy is on the view: { sxc, ry (how far), l, rr (columns), top, bot (rows), sh, kind }, or null if it can't be seen.
 export function enemyBox(eye, e) {
@@ -276,7 +276,7 @@ export function enemyBox(eye, e) {
   if (Math.abs(da) > Math.PI / 2) return null;
   const k = BUILD[e.kind], sxc = W / 2 + da / COL, sw = k.w / ry / COL;
   let sh = H * k.h / ry;
-  if (e.kind === "bat") sh = Math.max(BAT_ROWS, sh);
+  if (e.kind === "drone") sh = Math.max(DRONE_ROWS, sh);
   if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / DIE_TICKS);
   if (e.state === "dead" || sh < 1) return null;
   const bot = Math.round(H / 2 + H * (0.5 - k.up) / ry), top = Math.round(bot - sh);
@@ -337,19 +337,20 @@ export function turn(R, d) {
 
 // What an enemy looks like: the character drawn at (col, row) of its box, or "" where it is see-through. The page draws
 // exactly this and a shot is checked against exactly this: it hits only a part in DMG, with no spare cell round it,
-// so the gap between the legs, the space beside the head and a bat's wings miss.
+// so the gap between the legs, the space beside the head and a drone's rotors, arms and legs miss.
 //   short, tall   "@" the head (its top HEAD of rows, its middle columns), "#" the chest, "=" the gun, "|" the legs.
 //                 short holds its gun on the right, tall on the left, lower down.
-//   bat           "O" its body, in the middle; "/" "\\" "^" its wings, up on even flaps (flap is the page's), down on
-//                 odd ones. The O is the same in both, so a shot never depends on the flap.
-export function cell(b, c, r, flap = 0) {
+//   drone         "O" its core, in the middle, "[" "]" round it, "-" its arms; ":" its mast and "-" "~" its two rotors
+//                 above (spin turns them, the page's), "/" "\\" its legs below. Even both sides. Only the O is in DMG,
+//                 and spin never moves it, so a shot never depends on the spin.
+export function cell(b, c, r, spin = 0) {
   if (c < b.l || c >= b.rr || r < b.top || r >= b.bot) return "";
   const u = (c - b.l) / Math.max(1, b.rr - b.l), f = (r - b.top) / Math.max(1, b.sh), a = Math.abs(u - 0.5), L = u < 0.5;
-  if (b.kind === "bat") {
-    const up = flap % 2 === 0;
-    if (f < 1 / 3) return up ? (a > 0.3 ? (L ? "/" : "\\") : a < 0.1 ? "^" : "") : "";
-    if (f < 2 / 3) return a < 0.12 ? "O" : up ? (a < 0.3 ? (L ? "/" : "\\") : "") : (L ? "\\" : "/");
-    return up ? "" : a > 0.12 && a < 0.35 ? (L ? "\\" : "/") : "";
+  if (b.kind === "drone") {
+    const m = (b.l + b.rr - 1) / 2, d = Math.abs(c - m), hw = (b.rr - b.l) / 2, core = Math.max(0.5, 0.2 * hw);
+    if (f < 1 / 3) return d < 0.6 ? ":" : d > 0.45 * hw ? ((Math.round(d) + spin) % 3 === 0 ? "~" : "-") : "";
+    if (f < 2 / 3) return d <= core ? "O" : d <= core + 1 ? (c < m ? "[" : "]") : d < 0.8 * hw ? "-" : "";
+    return Math.abs(d - (core + 1)) < 0.6 ? (c < m ? "/" : "\\") : "";
   }
   if (f < HEAD) return a < HEAD_W ? "@" : "";
   if (b.kind === "tall") {
@@ -363,15 +364,14 @@ export function cell(b, c, r, flap = 0) {
 // Is (col, row) on an enemy's head? Exactly the drawn @, so far away, where the head is a row or two, a headshot is hard.
 export const onHead = (b, c, r) => cell(b, c, r) === "@";
 
-// Is (col, row) on the crown: the middle 3 @ of the head's top row (all of that row when it is 3 or fewer)? A shot there
-// drops the enemy at once (CROWN_DMG); the rest of the head counts DMG["@"].
+// Is (col, row) on the crown: the middle @ of the head's top row (the middle 2 when that row is an even width)? A shot
+// there drops the enemy at once (CROWN_DMG); the rest of the head counts DMG["@"].
 export function onCrown(b, c, r) {
   if (r !== b.top || !onHead(b, c, r)) return false;
   let a = c, z = c;
   while (onHead(b, a - 1, r)) a--;
   while (onHead(b, z + 1, r)) z++;
-  const m = Math.floor((a + z) / 2);
-  return c >= m - 1 && c <= m + 1;
+  return Math.abs(c - (a + z) / 2) < 1;
 }
 
 // A shot at the middle column of the view, on this row, now. Every shot counts, with or without anything to shoot at.
