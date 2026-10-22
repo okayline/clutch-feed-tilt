@@ -1,11 +1,11 @@
-# CLUTCH FEED TILT Changelog
+# TILT.EXE Changelog
 
 Newest first. Times are Hawaii time (HST).
 
 ---
 
 ## v0.11 — "Free Roam"
-**Wed Oct 21, 2026 · 2:20 PM HST**
+**Wed Oct 21, 2026 · 2:30 PM HST**
 
 - You walk anywhere on the day's two wings: W A S D to walk and strafe, and walls stop you. Removed: the rails, and the stops and turns on the spot along them.
 - Click the 3D view to take the mouse; moving it left and right turns you, up and down moves the crosshair. The crosshair stays in the middle and a click shoots there. Esc lets the mouse go. Removed: aiming by moving the crosshair over the view.
@@ -14,6 +14,11 @@ Newest first. Times are Hawaii time (HST).
 - The run ends when you walk through the exit, the door into the next wing (or the stairs). It's a gold door, shut until the two enemies guarding it are down. Three minutes and you didn't get out is a FEED. Removed: the run ending with the last enemy, and the ten minute limit.
 - Your squad is ghosts: up to 3 other players' sealed runs today walk beside you, and the kill feed says what they did as it happens. Removed: the made-up teammates and BOT_FEEDER, their scripted kill feed, and the 1v3 LAST MAN STANDING banner.
 - A miss counts as one with an enemy on the view only if the enemy isn't behind a wall. Removed: an enemy behind a wall counting.
+
+## v0.10.1 — "TILT.EXE"
+**Wed Oct 21, 2026 · 2:25 PM HST**
+
+- The game is called TILT.EXE: the page title, the name at the top of the screen and the save code file (now `tilt-exe-save-code.txt`). Removed: the name CLUTCH FEED TILT. Your runs are still called CLUTCH, FEED or TILT, and your save codes, runs and ledger are unchanged.
 
 ## v0.10 — "Double Tap"
 **Wed Oct 21, 2026 · 1:50 PM HST**

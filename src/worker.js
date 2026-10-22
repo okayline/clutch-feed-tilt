@@ -1,4 +1,4 @@
-// CLUTCH FEED TILT Worker. The page and its files are static assets; /api/* comes here first.
+// TILT.EXE Worker (repo, Worker and game id still clutch-feed-tilt). The page and its files are static assets; /api/* comes here first.
 //
 //   GET  /api/today                    { day, seed, name, run, ghosts }: today's date in UTC (from the server's clock, so a
 //                                      wrong phone clock can't pick another day), its seed, your name if you have a player,

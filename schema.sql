@@ -1,4 +1,4 @@
--- CLUTCH FEED TILT database (Cloudflare D1: cft-db)
+-- TILT.EXE database (Cloudflare D1: cft-db)
 --   npx wrangler d1 execute cft-db --remote --file=schema.sql
 
 -- A player is a browser cookie. The cookie holds a random token; only its SHA-256 hash is stored.

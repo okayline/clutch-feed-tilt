@@ -147,7 +147,7 @@ async function act(a) {
 function downloadCode() {
   const who = (acct && acct.name) || "your player";
   const text = [
-    "CLUTCH FEED TILT save code",
+    "TILT.EXE save code",
     "",
     `  ${newCode}`,
     "",
@@ -160,7 +160,7 @@ function downloadCode() {
   try {
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
-    a.download = `clutch-feed-tilt-save-code${acct && acct.name ? "-" + acct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}.txt`;
+    a.download = `tilt-exe-save-code${acct && acct.name ? "-" + acct.name.toLowerCase().replace(/[^a-z0-9]+/g, "-") : ""}.txt`;
     document.body.append(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     msg = "Save code downloaded. Keep it somewhere safe.";
