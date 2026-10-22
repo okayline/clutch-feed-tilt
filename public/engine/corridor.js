@@ -50,8 +50,8 @@ export function level(day) {
 // every offer of two locked doors the day's seed opens one, so the floor is one a 4Dungeon player could walk. `wing`
 // (1 to WINGS, from the day's ledger entry) is the furthest wing 4Dungeon's players had opened when the day was sealed:
 // the floor is open that far, and the run is on the RUN_WINGS wings ending with it (or the first two, early in the
-// quarter). You start in the first room of the first of them, facing the way on, and the exit is the
-// door into the room behind its last offer (the stairs, on the floor's last wing). Only the run's wings (and the goal)
+// quarter). You start in the first room of the first of them (or the next one, if the exit can be seen from the first's
+// middle), facing the way on, and the exit is the door into the room behind its last offer (the stairs, on the floor's last wing). Only the run's wings (and the goal)
 // are built: a door out of them into a room of another wing is plain wall, in the 3D view and on the minimap (app.js), so
 // the run is a few rooms, not the whole floor. A locked door is wall, drawn as a locked door; a sealed one (the other door
 // of an offer that was opened) is plain wall, as on the minimap.
@@ -78,15 +78,6 @@ export function corridor(seed, day, wing) {
   const rooms = floor.rooms;
   const goal = b + 1 < floor.wings.length ? floor.wings[b + 1].rooms[0] : floor.stairs;
   const shown = new Set([goal, ...floor.wings.slice(a, b + 1).flatMap((w) => w.rooms)]);
-  // the shortest way through open doors between shown rooms, from the first wing's first room to the goal
-  const first = floor.wings[a].rooms[0], prev = { [first]: -1 }, queue = [first];
-  while (queue.length) {
-    const i = queue.shift();
-    for (const j of Object.values(rooms[i].doors)) if (shown.has(j) && !(j in prev)) { prev[j] = i; queue.push(j); }
-  }
-  const route = [];
-  for (let i = goal; i !== -1; i = prev[i]) route.unshift(i);
-
   // the tile map: the run's rooms, with a room's width of wall all round
   const built = [...shown];
   const r0 = Math.min(...built.map((i) => rooms[i].r)) - 1, c0 = Math.min(...built.map((i) => rooms[i].c)) - 1;
@@ -116,8 +107,42 @@ export function corridor(seed, day, wing) {
       near[i].push(j);
     }
   }
-  const last = route.length - 1, guard = route[last - 1], c = (i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 });
-  const exit = doorTiles(guard, Object.keys(rooms[guard].doors).find((d) => rooms[guard].doors[d] === goal));
+  // the shortest way through open doors between shown rooms, from room `first` to the goal (null if there is none)
+  const wayFrom = (first) => {
+    const prev = { [first]: -1 }, queue = [first];
+    while (queue.length) {
+      const i = queue.shift();
+      for (const j of Object.values(rooms[i].doors)) if (shown.has(j) && !(j in prev)) { prev[j] = i; queue.push(j); }
+    }
+    if (!(goal in prev)) return null;
+    const way = [];
+    for (let i = goal; i !== -1; i = prev[i]) way.unshift(i);
+    return way;
+  };
+  const c = (i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 });
+  const exitOf = (way) => { const guard = way[way.length - 2]; return doorTiles(guard, Object.keys(rooms[guard].doors).find((d) => rooms[guard].doors[d] === goal)); };
+  // is there a clear line from the middle of room i to any tile of the exit?
+  const sees = (i, tiles) => {
+    const { x, y } = c(i);
+    return tiles.some(([tx, ty]) => {
+      for (let n = 1; n < 200; n++) {
+        const px = Math.floor(x + (tx + 0.5 - x) * n / 200), py = Math.floor(y + (ty + 0.5 - y) * n / 200);
+        if (tiles.some(([ex, ey]) => ex === px && ey === py)) return true;
+        if (!open[py][px]) return false;
+      }
+      return true;
+    });
+  };
+  // You start in the first room of the first wing, unless the exit can be seen from its middle (down a straight line of
+  // doors): then the first room of the wing that can't, so the exit is never in sight from where you start.
+  let route = null;
+  for (const i of floor.wings[a].rooms) {
+    const way = wayFrom(i);
+    if (!way) continue;
+    if (!route) route = way;
+    if (!sees(i, exitOf(way))) { route = way; break; }
+  }
+  const guard = route[route.length - 2], exit = exitOf(route);
   // you face the door to the next room on the way (the room behind you is another wing's, walled off)
   const s0 = c(route[0]), s1 = c(route[1]), start = { x: s0.x, y: s0.y, a: s1.x > s0.x ? 0 : s1.y > s0.y ? TURN / 4 : s1.x < s0.x ? TURN / 2 : 3 * TURN / 4 };
 
