@@ -497,7 +497,7 @@ function step(dt) {
     if (P.fragT !== undefined) {
       P.fragT += dt;
       $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
-      if (P.fragT >= FRAG_HOLD + FRAG_FADE) { finish(); $("screen").style.opacity = ""; }
+      if (P.fragT >= FRAG_HOLD + FRAG_FADE) { finish(); $("screen").style.opacity = ""; const bn = $("banner"); bn.classList.remove("fadein"); void bn.offsetWidth; bn.classList.add("fadein"); }   // the FEED banner fades in
     }
     return;
   }
