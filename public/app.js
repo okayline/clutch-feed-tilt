@@ -70,12 +70,12 @@ const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t
 // nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
 // close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
 // underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
-const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8, CURSOR_WAIT = 1.5;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
 const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
 // The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
 // its own short delay with its neighbours close behind, uncovering the new one; digital here, with a band of red glitch
-// along each column's top edge. Used when the corridor first shows (off a title card), on Run It Back (off the last
+// along each column's top edge. Used when the corridor first shows (off a black screen), on Run It Back (off the last
 // frame), when you get out (onto YOU GOT OUT) and when you die (onto FRAGGED). The fight waits while it runs. Drawing only;
 // skipped with Reduce Motion.
 let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live view), t, d (each column's delay), then }
@@ -409,9 +409,12 @@ function shoot() {
   const was = P.streak;
   const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
   const hit = C.fire(P, P.aimY);
-  gib(hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0));   // one chunk per point of damage: legs 1, chest 2, head 4, crown 5, a drone's O 6
-  if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
+  const dmg = hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0), crown = (hit === "head" || hit === "headkill") && dmg === C.CROWN_DMG;
+  gib(dmg);   // one chunk per point of damage: legs 1, chest 2, head 4, crown 8, a drone's O 6
+  // HEADSHOT!! only for a kill on the crown; a kill with a plain head hit is just a frag
+  if (hit === "headkill") { P.left--; say(crown ? "HEADSHOT!! YOU fragged ENEMY" : "YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
+  else if (crown) say("CROWN! YOU cracked ENEMY", "b");
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
   else if (hit === "body") say("YOU tagged ENEMY", "t");
   else if (hit === "leg") say("YOU tagged ENEMY in the leg", "t");
@@ -499,7 +502,8 @@ function step(dt) {
       $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
       if (P.fragT >= FRAG_HOLD + FRAG_FADE + FRAG_BLACK) {   // the view stays black (render) and the FEED banner fades in over it
         P.black = true; $("screen").style.opacity = "";
-        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); if (document.pointerLockElement) document.exitPointerLock(); }, { once: true });   // the mouse comes back once the banner is all the way in
+        const bn = $("banner"); bn.classList.add("fadein"); const run = P;
+        bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); setTimeout(() => { if (P === run && document.pointerLockElement) document.exitPointerLock(); }, CURSOR_WAIT * 1000); }, { once: true });   // the mouse comes back CURSOR_WAIT after the banner is all the way in (unless you ran it back)
         finish();
       }
     }
@@ -646,6 +650,6 @@ frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
   day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
   if (t.run) showSealed(t.run);
-  else { build(); const lv = C.level(day); startWipe(card([["T I L T . E X E", "b"], ["", ""], [`${day}  4DUNGEON ${lv.name} WING ${WING}`, "t"]])); }
+  else { build(); startWipe(card([])); }   // off a black screen
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));

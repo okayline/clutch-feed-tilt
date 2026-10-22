@@ -171,30 +171,30 @@ test("the hitbox is the drawn figure, no spare cell; the crown is the middle 1 o
   assert.deepEqual(["-", "~", ":", "[", "]", "/", "\\"].map((p) => C.DMG[p]), [undefined, undefined, undefined, undefined, undefined, undefined, undefined], "only the O is a hit");
 });
 
-test("short, tall, drone in turn; a drone dies to two hits on its O; a short one: the leg gap misses, 5 chest shots, 3 head shots, a crown shot, only the dead centre of the crown cell", () => {
+test("short, tall, drone in turn; a drone dies to three hits on its O; a short one: the leg gap misses, 8 chest shots, 4 head shots, two crown shots, only the dead centre of the crown cell", () => {
   assert.deepEqual(C.corridor(12345, "2026-10-21", 2).enemies.map((e) => e.kind), ["short", "tall", "drone", "short", "tall"]);
   const rows = (b, part) => { const out = []; for (let r = b.top; r < b.bot; r++) if (C.cell(b, Math.round(C.AIM), r) === part) out.push(r); return out; };
   const drones = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "drone"); return faceFirst(cor); };
   const [B, dr, drBox] = drones();
   assert.equal(dr.kind, "drone");
-  assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "body", "kill", "dying"], "its mast misses, its O (6 of 10) then drops it");
+  assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), C.fire(B, rows(drBox, "O")[0]), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "body", "body", "kill", "dying"], "its mast misses, its O (6 of 16) drops it on the third");
   const shorts = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "short"); return faceFirst(cor); };
   const [R, a, box] = shorts(), chest = rows(box, "#")[0];
   assert.equal(C.fire(R, box.bot - 1), "miss", "the middle column between the legs");
-  assert.deepEqual([1, 2, 3, 4, 5].map(() => C.fire(R, chest)), ["body", "body", "body", "body", "kill"], "chest 2 each, 10 HP");
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(() => C.fire(R, chest)), ["body", "body", "body", "body", "body", "body", "body", "kill"], "chest 2 each, 16 HP");
   assert.equal(a.state, "dying");
   const [Q, b, bb] = shorts(), head = rows(bb, "@");
   assert.ok(head.length >= 2 && C.onCrown(bb, Math.round(C.AIM), head[0]) && !C.onCrown(bb, Math.round(C.AIM), head[1]));
-  assert.deepEqual([1, 2, 3].map(() => C.fire(Q, head[1])), ["head", "head", "headkill"], "head 4 each: 4, 8, 12");
+  assert.deepEqual([1, 2, 3, 4].map(() => C.fire(Q, head[1])), ["head", "head", "head", "headkill"], "head 4 each: 4, 8, 12, 16");
   assert.equal(b.state, "dying");
   const [S, c, cb] = shorts();
-  assert.deepEqual([C.fire(S, cb.top), C.fire(S, cb.top), c.state], ["head", "headkill", "dying"], "the crown is 5: two drop it");
-  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [5, 1, 3, 2]);
-  // the crown is a little box in the middle of its cell: within 0.09 of the row's middle is 5 (two drop it), further out is a plain head hit (4: the second shot leaves it up)
+  assert.deepEqual([C.fire(S, cb.top), C.fire(S, cb.top), c.state], ["head", "headkill", "dying"], "the crown is 8: two drop it");
+  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [8, 1, 4, 2]);
+  // the crown is a little box in the middle of its cell: within 0.04 of the row's middle is 8 (two drop it), further out is a plain head hit (4: the second shot leaves it up)
   const centre = (dy) => { const [X, , xb] = shorts(); C.fire(X, xb.top + dy); return C.fire(X, xb.top + dy); };
-  assert.deepEqual([centre(0), centre(0.09), centre(-0.09), centre(0.1), centre(-0.17), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"], "a second plain head hit makes 8, not a kill");
+  assert.deepEqual([centre(0), centre(0.04), centre(-0.04), centre(0.05), centre(-0.09), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"], "a second plain head hit makes 8, not a kill");
   const [Y, y] = shorts(); const yb = C.enemyBox(C.eyeOf(Y), y), hr = rows(yb, "@");
-  assert.deepEqual([C.fire(Y, yb.top), C.fire(Y, hr[1]), C.fire(Y, rows(yb, "#")[0]), y.state], ["head", "head", "kill", "dying"], "crown 5 + head 4 + chest 2 = 11 drops it");
+  assert.deepEqual([C.fire(Y, yb.top), C.fire(Y, hr[1]), C.fire(Y, hr[1]), y.state], ["head", "head", "headkill", "dying"], "crown 8 + head 4 + head 4 = 16 drops it");
 });
 
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
