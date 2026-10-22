@@ -32,6 +32,8 @@ const GUN = [
   "    |########|    ",
 ];
 
+const reloadFrame = () => !P || !(P.reload > 0) ? 0 : P.reload > C.RELOAD_TICKS / 2 ? 1 : 2;
+
 let day = "", SEED = 0, WING = 0, myName = null, GHOSTS = [];
 let cor, enemies, squad, feed, P, lag = 0;
 
@@ -39,7 +41,7 @@ let cor, enemies, squad, feed, P, lag = 0;
 function build() {
   cor = C.corridor(SEED, day, WING);
   // the fight itself (where you are, HP, shots, enemies) is the engine's run (corridor.js newRun); the rest is the page's
-  P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
+  P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, gibs: [], hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
   enemies = P.enemies; lag = 0; turnLeft = 0;
   // Ghost teammates: other players' sealed runs today (/api/today ghosts), played again here (corridor.js replay) to
   // get where they were on every tick. They walk beside you; what they did is told in the kill feed as it happens.
@@ -59,6 +61,7 @@ const ghostAt = (m) => m.track[Math.max(0, Math.min(m.track.length, P.done ? Inf
 // Enemies glitch: each frame a few of their cells show a scrambled glyph, like a demon's words decoding in 4Dungeon
 // (daily-dungeon index.html VOICE_GLYPHS, less the @ so only a head is ever an @). Only the drawing: a shot is still
 // checked against corridor.js cell().
+const WIPE = 1.2;   // seconds a downed enemy takes to be wiped out (drawing only; the engine has it down at once)
 const SPIN_TICKS = 3;   // a drone's rotors turn every 3 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = { short: 0.25, tall: 0.25, drone: 0.1 }, GLITCH_HOLD = 2;   // a drone glitches less; a scrambled glyph stays 2 frames
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
@@ -158,21 +161,37 @@ function render() {
   // the same boxes and shapes the engine checks a shot against (corridor.js enemyBox, cell)
   // and ghost teammates, drawn in the ghost colour with an o for a head
   const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost", kind: "ghost" }));
+  // a downed enemy is wiped out digitally over WIPE seconds: drawn at full size (not the engine's shrinking box), its rows
+  // erased from the top down behind a band of glitch, the rest glitching more and more. Drawing only.
+  const wipeOf = (e) => e.diedAt === undefined ? -1 : (P.tick - e.diedAt) / (WIPE * C.FPS);
   const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
-    .map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
+    .map((e) => [e, wipeOf(e) >= 1 ? null : C.enemyBox(E, wipeOf(e) >= 0 ? { ...e, state: "out" } : e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
   for (const [e, b] of vis) {
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-        let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS));
-        if (c === "@" && k === "h") c = "o";
-        else if (c && k === "e") { const t = Math.floor(P.tick / GLITCH_HOLD); if (noise(x, y, t) < GLITCH[b.kind]) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
-        if (c) put(x, y, c, k);
+        let c = C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS)), kk = k;
+        const w = wipeOf(e), t = Math.floor(P.tick / GLITCH_HOLD);
+        if (c && w >= 0) {   // being wiped: gone above the line, a bright glitch band at it, glitching below
+          const f = (y - b.top) / Math.max(1, b.bot - b.top);
+          if (f < w) c = "";
+          else if (f < w + 0.18) { c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; kk = "g"; }
+          else if (noise(x, y, t) < 0.3 + 0.6 * w) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)];
+        }
+        else if (c === "@" && k === "h") c = "o";
+        else if (c && k === "e") { if (noise(x, y, t) < GLITCH[b.kind]) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
+        if (c) put(x, y, c, kk);
       }
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
+  // a chunk: 2 or 3 cells wide, 1 or 2 tall, glitching like the enemies (half its cells a scrambled glyph, each held GLITCH_HOLD frames)
+  const gt = Math.floor(P.tick / GLITCH_HOLD);
+  P.gibs.forEach((g, n) => { for (let j = 0; j < g.h; j++) for (let i = 0; i < g.w; i++) {
+    const c = noise(n * 7 + i, j, gt) < 0.5 ? GLITCH_GLYPHS[Math.floor(noise(j, n * 7 + i, gt + 7) * GLITCH_GLYPHS.length)] : g.c;
+    put(Math.round(g.x) + i, Math.round(g.y) + j, c, g.t > GIB_LIFE / 3 ? "e" : "d");
+  } });
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
@@ -182,8 +201,20 @@ function render() {
   // the gun: one rigid piece at the bottom middle, swaying out the way you turn along a small arc (one row lower once it
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
-  GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
+  const rf = reloadFrame();
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf];
+  // reloading: two frames. First the gun swings off to the right and drops 4 rows, the grip empty, and the old magazine
+  // falls away on its left; then it comes halfway back, 2 rows down, with a full magazine coming up on its left. RELOADING
+  // blinks above it the whole time.
+  const magOut = rf === 1;
+  if (rf) {
+    const fall = Math.round((1 - P.reload / C.RELOAD_TICKS) * 12);
+    const mag = rf === 1 ? ["[  ]", "[  ]", "[__]"] : ["[##]", "[##]", "[##]"];
+    const mx = gx - 6, my = rf === 1 ? H - 9 + fall : H - 1 - Math.max(0, fall - 6);
+    mag.forEach((row, i) => [...row].forEach((ch, k) => put(mx + k, my + i, ch, rf === 1 ? "d" : "t")));
+    if (Math.floor(P.tick / 3) % 2 === 0) [..."RELOADING"].forEach((ch, k) => put(Math.round(W / 2) - 4 + k, H - GUN.length - 2, ch, "g"));
+  }
+  GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
   let out = "";
   for (let y = 0; y < H; y++) {
@@ -308,11 +339,25 @@ function showBanner(lines, secs) {
 
 // ---- play ---------------------------------------------------------------------------------------------------
 // A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
+// Gibs: one chunk of data for each point of damage a hit does, 2 or 3 cells wide, flying off where a shot hits (at the crosshair), falling and gone in under a second.
+// Drawing only: nothing in the engine.
+const GIB_GLYPHS = "#%&@$8", GIB_LIFE = 0.65;
+function gib(n) {
+  if (reduced) return;
+  const x = C.AIM + P.jit, y = P.aimY;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 2 * Math.PI, sp = 20 + Math.random() * 30;
+    P.gibs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - 6, t: GIB_LIFE * (0.6 + Math.random() * 0.4), c: GIB_GLYPHS[Math.floor(Math.random() * GIB_GLYPHS.length)], w: 2 + (Math.random() < 0.4 ? 1 : 0), h: Math.random() < 0.3 ? 2 : 1 });
+  }
+}
+
 function shoot() {
   if (P.done || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
+  const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
   const hit = C.fire(P, P.aimY);
+  gib(hpBefore - P.enemies.reduce((n, e) => n + e.hp, 0));   // one chunk per point of damage: legs 1, chest 2, head 4, crown 5, a drone's O 6
   if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
@@ -378,7 +423,10 @@ function showSealed(run) {
 
 // One frame: the page's own easing and timers, then as many of the engine's fixed ticks as the time that passed holds.
 function step(dt) {
-  P.sway -= P.sway * Math.min(1, dt * 8); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
+  P.sway -= P.sway * Math.min(1, dt * 8); P.flash = Math.max(0, P.flash - dt);
+  P.gibs = P.gibs.filter((g) => (g.t -= dt) > 0);
+  for (const g of P.gibs) { g.x += g.vx * dt; g.y += g.vy * dt; g.vy += 40 * dt; }
+  P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   if (P.done) return;
@@ -387,6 +435,7 @@ function step(dt) {
       P.hurt = 0.25; say("ENEMY tagged YOU", "e");
       if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
     } else if (ev === "open") say("THE EXIT IS OPEN", "g");
+    for (const e of enemies) if ((e.state === "dying" || e.state === "dead") && e.diedAt === undefined) e.diedAt = P.tick;
     const r = C.roomOf(cor, P.x, P.y);
     if (r >= 0 && r !== P.seen[P.seen.length - 1]) { P.seen = P.seen.filter((i) => i !== r).concat(r); }
     // what the ghosts did on this tick of their runs

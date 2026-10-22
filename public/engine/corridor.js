@@ -240,7 +240,7 @@ const DIE_TICKS = 8;
 // What a hit takes off an enemy (10 HP), by the part of it hit (cell()): the chest and gun drop it in 5, the head in 3,
 // two crown shots (onCrown, the dead centre of that @) drop it, or 2 chest and 2 head, or 3 head; the legs take half a chest
 // shot, and two hits on a drone's O drop it.
-export const CROWN_ROW = 0.17;   // the crown is a little box in the middle of its cell: one column wide, and a shot within this much of the cell's middle row (about a third of a row, 4px on a full-size screen; rows are kept to 2 decimals)
+export const CROWN_ROW = 0.09;   // the crown is a little box in the middle of its cell: one column wide, and a shot within this much of the cell's middle row (under a fifth of a row, about 2px on a full-size screen; rows are kept to 2 decimals)
 export const ENEMY_HP = 10, CROWN_DMG = 5, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())

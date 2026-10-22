@@ -4,6 +4,17 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.16.0 — "Gibs"
+**Wed Oct 21, 2026 · 4:39 PM HST**
+
+- Gibs: a hit throws chunks of data from the crosshair, one for each point of damage (legs 1, chest or gun 2, head 4, crown 5, a drone's O 6). Each chunk is 2 or 3 cells wide and 1 or 2 tall, glitches like the enemies, flies out, falls and is gone in under a second. None with Reduce Motion on. Removed: hits showing nothing but the feed line.
+- A downed enemy is wiped out over 1.2 seconds: it stays full size while a band of glitch sweeps down it from the head, erasing what's above, the rest glitching more and more. Drawing only; the engine still has it down at once. Removed: the body shrinking to % signs in about half a second.
+- Reloading is two frames: the gun swings off to the right and down while the empty magazine falls away on its left, then comes halfway back with a full magazine rising beside it. RELOADING blinks above the gun. Removed: no sign of a reload on the gun.
+- The crown is about 2 pixels tall (within 0.09 of the middle of the @'s row), one column wide. Removed: the crown 0.17 rows either side (about 4 pixels).
+- The crown change is a rules change (corridor.js `CROWN_ROW`), so a run sealed before this replays differently as a ghost. The rest is drawing only.
+
+---
+
 ## v0.15.1 — "Crown Box"
 **Wed Oct 21, 2026 · 4:27 PM HST**
 
