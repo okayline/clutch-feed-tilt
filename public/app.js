@@ -422,7 +422,7 @@ function shoot() {
 
 function finish() {
   P.done = C.label(P);
-  if (document.pointerLockElement) document.exitPointerLock();
+  if (document.pointerLockElement && !P.black) document.exitPointerLock();   // after a death, not until the banner has faded in (step)
   endBanner(P.done);
   if (P.practice) P.seal = "PRACTICE MODE. NOT SEALED."; else seal();
 }
@@ -499,7 +499,7 @@ function step(dt) {
       $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
       if (P.fragT >= FRAG_HOLD + FRAG_FADE + FRAG_BLACK) {   // the view stays black (render) and the FEED banner fades in over it
         P.black = true; $("screen").style.opacity = "";
-        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => bn.classList.remove("fadein"), { once: true });
+        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); if (document.pointerLockElement) document.exitPointerLock(); }, { once: true });   // the mouse comes back once the banner is all the way in
         finish();
       }
     }
