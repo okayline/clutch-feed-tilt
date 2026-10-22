@@ -67,7 +67,9 @@ const eye = () => C.eyeOf(P);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
-const TALL = 2;   // a wall is twice as high as the floor-to-eye-and-back it was, so there is a ceiling above you
+const TALL = 2;
+const SIGHT = 9;   // how far you can see, in tiles: a room and into the next, so the end of the run stays out of sight
+const GATE = 0.9;  // the exit's holo gate is this far above your eye, the floor being 0.5 below it   // a wall is twice as high as the floor-to-eye-and-back it was, so there is a ceiling above you
 const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x] = c; cl[y][x] = k; } };
 
 function render() {
@@ -91,51 +93,67 @@ function render() {
     h.pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)); h.id = mx + "," + my + "," + side;
     // the flat stretch of wall it is on: the grid line its face lies along, and how far along that line it was hit. A
     // run of blocks side by side is one stretch, drawn as one wall with no | between its blocks; a door is its own.
-    h.line = side + "," + (side === 0 ? mx + (sx < 0 ? 1 : 0) : my + (sy < 0 ? 1 : 0)) + "," + (h.door ? "x" : h.locked ? "l" : "");
+    // the shut exit is a holo gate in the middle tile of its 3; the tiles either side of it are plain wall
+    h.gate = h.door && mx === cor.exit[1][0] && my === cor.exit[1][1];
+    h.line = side + "," + (side === 0 ? mx + (sx < 0 ? 1 : 0) : my + (sy < 0 ? 1 : 0)) + "," + (h.gate ? "x" : h.locked ? "l" : "");
     h.at = side === 0 ? py + d * h.rdy : px + d * h.rdx;
     // its top and bottom, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you
     // narrows away. A wall is TALL times as high as you see from the floor up to your eye and back down, standing on the
     // same floor as the enemies (corridor.js enemyBox), so it rises above you to the ceiling.
     h.t = H / 2 - (TALL - 0.5) * H / Math.max(0.3, d); h.b = H / 2 + 0.5 * H / Math.max(0.3, d);
+    h.far = d > SIGHT;   // too far to see: darkness
     hits.push(h);
   }
   // are columns x and x + 1 on the same stretch of wall?
-  const joined = (x) => x >= 0 && x + 1 < W && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
+  const joined = (x) => x >= 0 && x + 1 < W && !hits[x].far && !hits[x + 1].far && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
   for (let x = 0; x < W; x++) {
-    const { d, side, door, locked, rdx, rdy, pd, t, b } = hits[x], top = Math.round(t), bot = Math.round(b);
-    const k = door ? "g" : pd > 14 ? "d" : pd > 7 ? "t" : "";
+    const { d, side, gate, locked, rdx, rdy, pd, t, b } = hits[x], top = Math.round(t), bot = Math.round(b);
+    const k = pd > 14 ? "d" : pd > 7 ? "t" : "";
     // where the top edge crosses into this column and out of it: halfway to the columns either side on the same stretch
     const tl = joined(x - 1) ? (hits[x - 1].t + t) / 2 : t, tr = joined(x) ? (hits[x + 1].t + t) / 2 : t;
     const bl = joined(x - 1) ? (hits[x - 1].b + b) / 2 : b, br = joined(x) ? (hits[x + 1].b + b) / 2 : b;
     const sideOn = (side === 0 ? Math.abs(rdx) : Math.abs(rdy)) <= 0.8;   // a side wall, running away from you
     // a corner between this column and the one to its left: the | goes on the nearer of the two, all the way up it
-    const corner = x > 0 && !joined(x - 1), edge = corner && hits[x - 1].d < d ? x - 1 : x;
-    if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(e.b)); y++) put(edge, y, "|", e.door ? "g" : e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
-    for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
+    // (into darkness, past SIGHT, the | goes on the one you can see)
+    let edge = x > 0 && hits[x - 1].d < d ? x - 1 : x;
+    if (x > 0 && hits[edge].far) edge = edge === x ? x - 1 : x;
+    const corner = x > 0 && !joined(x - 1) && !hits[edge].far;
+    if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(e.b)); y++) put(edge, y, "|", e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
+    for (let y = Math.max(0, top); y < Math.min(H, bot) && !hits[x].far; y++) {
       if (ch[y][x] === "|") continue;   // a corner drawn from the column to the right
-      // the exit, while it's shut: a gold door; a locked door: # all over, as the minimap marks it
-      else if (door || locked) put(x, y, "#", k);
+      // a locked door: # all over, as the minimap marks it
+      else if (locked) put(x, y, "#", k);
       // a wall facing you (its ray within about 37 degrees of straight on): an upright | at the edge of every block in it
       else if (!sideOn && x > 0 && hits[x - 1].id !== hits[x].id) put(x, y, "|", k);
+    }
+    // the exit, while it's shut: a holo gate a little over head height: a bright post at each side and a field of
+    // flickering : ' . running down between them, as if it were falling
+    if (gate && !hits[x].far) {
+      const gt = Math.max(0, Math.round(H / 2 - GATE * H / Math.max(0.3, d))), post = !(x > 0 && hits[x - 1].gate) || !(x + 1 < W && hits[x + 1].gate);
+      for (let y = gt; y < Math.min(H, bot); y++) {
+        if (post) { put(x, y, "|", "b"); continue; }
+        const c = " :'."[(((y - Math.floor(P.tick / 2) - Math.floor(noise(x, 0, 0) * 4)) % 4) + 4) % 4];   // each column falls out of step with the next
+        put(x, y, c, c === " " ? "" : "t");
+      }
     }
     // a side wall's edge is one unbroken line: a column it crosses no row in still gets its \ or /, on the row it runs
     // along, unless it slopes under 1 row in 4 columns (that would be a flat run of them); a wall facing you keeps its
     // flat edge undrawn
     // (the top edge, then the bottom one; each is a \ where it falls to the right and a / where it rises)
-    for (const [l, r] of [[tl, tr], [bl, br]]) {
+    for (const [l, r] of hits[x].far ? [] : [[tl, tr], [bl, br]]) {
       const y0 = Math.round(Math.min(l, r)), y1 = Math.round(Math.max(l, r)), c = r > l ? "\\" : "/", mid = Math.floor((l + r) / 2);
       const [ya, yb] = y1 > y0 ? [y0, y1] : sideOn && Math.abs(r - l) >= 0.25 ? [mid, mid + 1] : [0, 0];
       for (let y = ya; y < yb; y++) put(x, y, c, k);
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
-      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
+      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= Math.min(d, SIGHT)) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
     // the ceiling: the same lines, overhead, where the walls' tops meet it
     for (let y = Math.min(top, H / 2 - 1) - 1; y >= 0; y--) {
-      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
+      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= Math.min(d, SIGHT)) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
@@ -149,7 +167,7 @@ function render() {
   for (const [e, b] of vis) {
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
-      if (zbuf[x] < ry) continue;
+      if (zbuf[x] < ry || ry > SIGHT) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
         let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS));
         if (c === "@" && k === "h") c = "o";
@@ -257,12 +275,13 @@ function frame(message) {
 
 // 4Dungeon's minimap (engine/floor.js), 29 x 5, centred on the room you're in: the rooms you've walked
 // through, the ways out of them, and an arrow for the way you face. Drawn by floor.js, 4Dungeon's own minimap code, from
-// the floor as it is (every door a gap, a locked one #), then a + put on every room corner. floor.js draws extra hallways out of room 0 (an irl-dungeon
+// the floor as it is (every door a gap, a locked one #, one into another wing wall), then a + put on every room corner. floor.js draws extra hallways out of room 0 (an irl-dungeon
 // rule), so it is handed the floor with every room number moved up by one.
 function minimap() {
   const f = cor.floor, up = (j) => j + 1, at = P.seen[P.seen.length - 1];
   const view = {
-    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, doors: Object.fromEntries(Object.entries(r.doors).map(([d, j]) => [d, up(j)])) })],
+    // a door into a room that isn't built (another wing's) is left out, so floor.js draws it as wall, as the 3D view has it
+    rooms: [undefined, ...f.rooms.map((r) => r && { ...r, doors: Object.fromEntries(Object.entries(r.doors).filter(([, j]) => !f.rooms[j] || cor.near[j]).map(([d, j]) => [d, up(j)])) })],
     start: up(f.start), sealed: Object.fromEntries(Object.keys(f.sealed || {}).map((j) => [up(+j), true])),
   };
   const visited = []; for (const i of P.seen) visited[up(i)] = true;

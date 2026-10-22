@@ -17,7 +17,7 @@ test("the 4Dungeon level of a day: the moon quarter at 00:00 UTC, one wing a day
 
 const MAPS = [[1, "2026-10-21", 2], [2, "2026-10-14", 3], [3, "2026-10-19", 4], [12345, "2026-10-24", 6], [3359765128, "2026-10-28", 7]];
 
-test("a map: the same seed gives the same map; you start in the first room facing north; the floor is built as far as it is open; 5 enemies in notches, 2 guarding the exit, the only way to the goal", () => {
+test("a map: the same seed gives the same map; you start in the first room facing the way on; only the run's wings are built; 5 enemies in notches, 2 guarding the exit, the others on the way; the only way to the goal", () => {
   const day = "2026-10-21";
   assert.deepEqual(C.corridor(12345, day, 4), C.corridor(12345, day, 4));
   assert.notDeepEqual(C.corridor(1, day, 4).open, C.corridor(2, day, 4).open, "another seed, other doors");
@@ -31,18 +31,23 @@ test("a map: the same seed gives the same map; you start in the first room facin
     assert.equal(c.goal, c.route[c.route.length - 1]);
     assert.equal(C.roomOf(c, c.start.x, c.start.y), c.route[0], "you start in the first room");
     assert.ok(c.open[Math.floor(c.start.y)][Math.floor(c.start.x)]);
-    assert.equal(c.start.a, 3 * C.TURN / 4, "north: three quarters of the way round from east, y grows south");
-    // every open room is built, with an open gap at every door the minimap draws open, a locked door's 3 tiles marked
-    // where it has none, and a sealed one (the other of an opened offer) plain wall
-    const f = c.floor, mid = (S - 1) / 2;
+    const [sx, sy] = [[1, 0], [0, 1], [-1, 0], [0, -1]][c.start.a / (C.TURN / 4)];   // east, south (y grows south), west, north
+    assert.equal(C.roomOf(c, c.start.x + sx * C.S, c.start.y + sy * C.S), c.route[1], `seed ${seed}: you face the next room on the way`);
+    // only the run's 2 wings and the goal are built, with an open gap at every door between built rooms, a door into
+    // another wing's room plain wall, a locked door's 3 tiles marked, and a sealed one (the other of an opened offer)
+    // plain wall
+    const f = c.floor, mid = (S - 1) / 2, isBuilt = (i) => c.blocks.some((row) => row.includes(i));
+    const runWings = new Set([Math.max(2, wing) - 2, Math.max(2, wing) - 1]);
     for (const [i, room] of f.rooms.entries()) {
       if (!room) continue;
-      assert.ok(Object.values(c.blocks).some((row) => row.includes(i)), `room ${i} is built`);
+      assert.equal(isBuilt(i), runWings.has(room.wing) || i === c.goal, `seed ${seed}: room ${i} (wing ${room.wing}) is built only if it's in the run`);
+      if (!isBuilt(i)) continue;
       for (const [dir, j] of Object.entries(room.doors)) {
         const [ux, uy] = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] }[dir];
         const bx = c.blocks.findIndex((row) => row.includes(i)), by = bx, cx = c.blocks[by] ? c.blocks[by].indexOf(i) : -1;
         const x = cx * S + mid + ux * mid, y = by * S + mid + uy * mid;   // the middle tile of the door, on this room's edge
-        if (f.rooms[j]) assert.ok(c.open[y][x], `seed ${seed}: room ${i}'s ${dir} door is open`);
+        if (f.rooms[j] && isBuilt(j)) assert.ok(c.open[y][x], `seed ${seed}: room ${i}'s ${dir} door is open`);
+        else if (f.rooms[j]) assert.ok(!c.open[y][x] && !c.locked[x + "," + y], `seed ${seed}: room ${i}'s ${dir} door, into another wing, is wall`);
         else if (f.sealed && f.sealed[j]) assert.ok(!c.open[y][x] && !c.locked[x + "," + y], `seed ${seed}: room ${i}'s ${dir} door is sealed`);
         else assert.ok(!c.open[y][x] && c.locked[x + "," + y], `seed ${seed}: room ${i}'s ${dir} door is locked`);
       }
@@ -62,6 +67,10 @@ test("a map: the same seed gives the same map; you start in the first room facin
       assert.equal(C.roomOf(c, e.tx, e.ty), e.room);
       assert.ok(e.room !== c.route[0] && e.room !== c.goal, "never in the first room or the goal");
     }
+    // the three that don't guard are in rooms on the way to the exit, where it has rooms enough between start and guard
+    const between = c.route.slice(1, -2);
+    if (between.length >= 3) assert.ok(c.enemies.slice(2).every((e) => between.includes(e.room) || e.room === c.route[c.route.length - 2]), `seed ${seed}: the others are on the way`);
+    else for (const r of between) assert.ok(c.enemies.some((e) => e.room === r), `seed ${seed}: an enemy in every room on the way`);
     assert.equal(new Set(c.enemies.map((e) => e.x + "," + e.y)).size, 5, "one enemy a notch");
   }
 });
@@ -165,8 +174,9 @@ test("the hitbox is the drawn figure, no spare cell; the crown is the middle 1 o
 test("short, tall, drone in turn; a drone dies to one hit on its O; a short one: the leg gap misses, 3 chest shots, a double tap, a crown shot", () => {
   assert.deepEqual(C.corridor(12345, "2026-10-21", 2).enemies.map((e) => e.kind), ["short", "tall", "drone", "short", "tall"]);
   const rows = (b, part) => { const out = []; for (let r = b.top; r < b.bot; r++) if (C.cell(b, Math.round(C.AIM), r) === part) out.push(r); return out; };
-  const [B, dr, drBox] = faceFirst(C.corridor(12345, "2026-10-21", 2));
-  assert.equal(dr.kind, "drone", "the first one out on this map");
+  const drones = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "drone"); return faceFirst(cor); };
+  const [B, dr, drBox] = drones();
+  assert.equal(dr.kind, "drone");
   assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "kill", "dying"], "its mast misses, its O drops it");
   const shorts = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "short"); return faceFirst(cor); };
   const [R, a, box] = shorts(), chest = rows(box, "#")[0];
@@ -185,9 +195,12 @@ test("short, tall, drone in turn; a drone dies to one hit on its O; a short one:
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
   const R0 = C.newRun(C.corridor(12345, "2026-10-21", 2));
   assert.equal(C.fire(R0, 10), false); assert.equal(R0.streak, 0.25);
-  const [R, , b] = faceFirst(C.corridor(12345, "2026-10-21", 2));
-  C.turn(R, 80);   // 80 units is 7 degrees: the enemy is about 10 columns left of the crosshair, still on the view
-  assert.ok(C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out")).rr < C.AIM - 2);
+  const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "drone");   // a narrow one
+  const [R, , b] = faceFirst(cor);
+  // turn right a little at a time until the enemy is left of the crosshair, but still on the view
+  const box = () => C.enemyBox(C.eyeOf(R), R.enemies.find((e) => e.state === "out"));
+  for (let n = 0; n < 20 && box().rr >= C.AIM - 2; n++) C.turn(R, 40);
+  assert.ok(box().rr < C.AIM - 2 && box().rr > 0);
   assert.equal(C.fire(R, b.top), "miss"); assert.equal(R.streak, 3);
   C.fire(R, b.top); assert.equal(R.streak, 4.5);
 });
