@@ -175,7 +175,12 @@ function render() {
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
-  for (const g of P.gibs) for (let j = 0; j < g.h; j++) for (let i = 0; i < g.w; i++) put(Math.round(g.x) + i, Math.round(g.y) + j, g.c, g.t > GIB_LIFE / 3 ? "e" : "d");   // a chunk: 2 or 3 cells wide, 1 or 2 tall
+  // a chunk: 2 or 3 cells wide, 1 or 2 tall, glitching like the enemies (half its cells a scrambled glyph, each held GLITCH_HOLD frames)
+  const gt = Math.floor(P.tick / GLITCH_HOLD);
+  P.gibs.forEach((g, n) => { for (let j = 0; j < g.h; j++) for (let i = 0; i < g.w; i++) {
+    const c = noise(n * 7 + i, j, gt) < 0.5 ? GLITCH_GLYPHS[Math.floor(noise(j, n * 7 + i, gt + 7) * GLITCH_GLYPHS.length)] : g.c;
+    put(Math.round(g.x) + i, Math.round(g.y) + j, c, g.t > GIB_LIFE / 3 ? "e" : "d");
+  } });
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
