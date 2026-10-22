@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.18.2 — "Light Check"
+**Wed Oct 21, 2026 · 7:40 PM HST**
+
+- Sending a run to the shared registry reads only the newest two ledger entries. Removed: reading and re-checking the whole ledger after every run, which got slower with every run (the ledger itself is unchanged).
+
 ## v0.18.1 — "Spare Mag"
 **Wed Oct 21, 2026 · 7:25 PM HST**
 

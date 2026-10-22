@@ -18,7 +18,7 @@
 // The seed is the first 4 bytes of the hash of the day's ledger entry (src/ledger.js dayEntry): everyone gets the same corridor.
 
 import { giveName } from "./names.js";
-import { head, chainInsert, dayEntry, isUnique, verifyChain } from "./ledger.js";
+import { head, chainInsert, dayEntry, isUnique, verifyTip } from "./ledger.js";
 import * as C from "../public/engine/corridor.js";
 
 const COOKIE = "cft";
@@ -240,17 +240,18 @@ async function ledgerPage(req, env, url) {
 
 // After a run is sealed, the ledger so far goes to the shared registry (dungeon-items, bound as REGISTRY) as a
 // checkpoint: its entry count and newest hash, which covers every entry before it. The registry is timestamped on
-// Bitcoin, so this ledger is too. Only a chain that checks out is sent. A registry that's away never stops a run: the
-// next run's checkpoint covers it. (Copied from moba-beat's checkpoint.) `detail` is the run just sealed: its day, label,
+// Bitcoin, so this ledger is too. Only a newest entry that checks out is sent (verifyTip reads it and the one before
+// it, so this costs the same however long the ledger is; entries are never deleted, so the newest id is the count).
+// A registry that's away never stops a run: the next run's checkpoint covers it. (Copied from moba-beat's checkpoint.) `detail` is the run just sealed: its day, label,
 // HP, hits and shots, which the registry's page tells as a sentence (no player, no shot log).
 async function checkpoint(env, detail) {
   try {
     if (!env.REGISTRY) return;
-    const rows = (await env.DB.prepare("SELECT id, record, prev_hash, hash FROM ledger ORDER BY id").all()).results;
+    const rows = (await env.DB.prepare("SELECT id, record, prev_hash, hash FROM ledger ORDER BY id DESC LIMIT 2").all()).results.reverse();
     if (!rows.length) return;
-    const v = await verifyChain(rows);
+    const v = await verifyTip(rows);
     if (!v.ok) return console.error("The ledger is broken at entry " + v.at + ": no checkpoint sent.");
-    const res = await env.REGISTRY.checkpoint({ game: "clutch-feed-tilt", entries: rows.length, head: rows[rows.length - 1].hash, detail });
+    const res = await env.REGISTRY.checkpoint({ game: "clutch-feed-tilt", entries: rows[rows.length - 1].id, head: rows[rows.length - 1].hash, detail });
     if (res && res.error) console.error("The registry refused the checkpoint: " + res.error);
   } catch (e) { console.error(e); }
 }
