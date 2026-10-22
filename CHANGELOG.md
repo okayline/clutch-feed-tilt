@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.12.3 — "High Ceilings"
+**Wed Oct 21, 2026 · 3:38 PM HST**
+
+- Walls in the 3D view are twice as high: they stand on the same floor as the enemies and rise above you, with their own \ and / top edge. Above them is a ceiling, drawn as dotted lines running the way you face, like the floor's. Only the drawing changed; shots are checked as before. Removed: walls only as high as from the floor to your eye and back, and the empty space above them.
+
+---
+
 ## v0.12.2 — "Side Walls"
 **Wed Oct 21, 2026 · 3:25 PM HST**
 
