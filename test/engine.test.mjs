@@ -75,6 +75,17 @@ test("a map: the same seed gives the same map; you start in the first room facin
   }
 });
 
+test("a floor that ends early (its last wing has no locked doors and no stairs) still makes a map: the run ends a wing sooner", () => {
+  // 2026-01-03 (B3F), seed 748941: the doors it opens leave 6 wings, no locked door and no stairs, so wings 6 and 7 can't be built
+  for (const wing of [6, 7]) {
+    const c = C.corridor(748941, "2026-01-03", wing);
+    assert.equal(c.floor.wings.length, 6);
+    assert.equal(c.goal, c.floor.wings[5].rooms[0], "the goal is the last wing's first room");
+    assert.equal(c.route[c.route.length - 1], c.goal);
+    assert.equal(c.enemies.length, 5);
+  }
+});
+
 test("walking: W walks the way you face at 3 tiles a second; walls stop you; turning is in TURN units", () => {
   const c = C.corridor(12345, "2026-10-21", 2), R = C.newRun(c);
   const { x, y, a } = R, [dy, dx] = C.sincos(a * 2 * Math.PI / C.TURN);
