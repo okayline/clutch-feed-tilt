@@ -4,6 +4,17 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.11 — "Free Roam"
+**Wed Oct 21, 2026 · 2:20 PM HST**
+
+- You walk anywhere on the day's two wings: W A S D to walk and strafe, and walls stop you. Removed: the rails, and the stops and turns on the spot along them.
+- Click the 3D view to take the mouse; moving it left and right turns you, up and down moves the crosshair. The crosshair stays in the middle and a click shoots there. Esc lets the mouse go. Removed: aiming by moving the crosshair over the view.
+- On a phone: put a thumb down on the left half of the view and drag to walk; drag on the right half to turn and aim, and tap there to shoot. Removed: tapping where you want to shoot.
+- 5 enemies, all yours to shoot, wait in notches in the walls of the rooms. One steps out when it can see you, and it only shoots while it can. Removed: 3 enemies that woke by how far along the rails you were and hit you through walls, and your squad taking 2 of 5.
+- The run ends when you walk through the exit, the door into the next wing (or the stairs). It's a gold door, shut until the two enemies guarding it are down. Three minutes and you didn't get out is a FEED. Removed: the run ending with the last enemy, and the ten minute limit.
+- Your squad is ghosts: up to 3 other players' sealed runs today walk beside you, and the kill feed says what they did as it happens. Removed: the made-up teammates and BOT_FEEDER, their scripted kill feed, and the 1v3 LAST MAN STANDING banner.
+- A miss counts as one with an enemy on the view only if the enemy isn't behind a wall. Removed: an enemy behind a wall counting.
+
 ## v0.10 — "Double Tap"
 **Wed Oct 21, 2026 · 1:50 PM HST**
 

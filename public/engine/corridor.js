@@ -1,16 +1,16 @@
 // CLUTCH FEED TILT. The rules, shared by the page and the tests. Pure functions only: no network, no storage.
 //
 // Each UTC day has one map, the same for everyone. Its wings are the real 4Dungeon floor of that moon quarter
-// (level(day)); the day's ledger entry gives the seed (/api/today) that opens its doors. corridor(seed, day) lays out the rooms and the rails through them, the enemies' notches and when they fire, and who your
-// 4 teammates are.
+// (level(day)); the day's ledger entry gives the seed (/api/today) that opens its doors. corridor(seed, day) lays out
+// the rooms, where you start, the exit door, and the 5 enemies' notches. You walk anywhere on it (WASD) and turn with
+// the mouse; the run ends when you walk through the exit, die, or run out of time.
 // label() names a finished run: CLUTCH, FEED or TILT.
 
 import FLOOR from "./floor.js";
 
-export const ENEMIES = 5;   // enemies at the start; your teammates take 2 of them before they fall
+export const ENEMIES = 5;   // enemies on the map, all yours to shoot
 export const HP = 3;
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
-export const TURN_STEPS = 6; // a 90 degree turn happens in 6 jumps of 15 degrees
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
 export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's own wing
 
@@ -25,7 +25,6 @@ export function rng(seed) {
   };
 }
 
-const NAMES = ["zara_k", "mogger99", "lagspike", "gg_ez", "xX_n00b", "tiltproof", "deku_main"];
 const DIRS = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] };   // [x, y] on the tile map: y grows going south
 
 // 4Dungeon's moon, copied unchanged: QREF, QLEN and the quarter from daily-dungeon screen.js; hash, seedFrom and the
@@ -48,20 +47,20 @@ export function level(day) {
 
 // The day's map. 4Dungeon's wing generator (engine/floor.js) builds that quarter's floor from its shared seed, and at
 // every offer of two locked doors the day's seed opens one, so the whole floor is one a 4Dungeon player could walk.
-// The run goes through RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): the
-// rails run from the first room of the first of them to the room behind its last offer (the stairs, on the floor's
-// last wing), the shortest way through open doors, so they turn wherever the wings turn. Only those wings' rooms are
-// drawn. Rooms off the rails (dead ends) stay open to look into. Locked doors that weren't opened stay wall.
+// The run is on RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): you start in the
+// first room of the first of them, and the exit is the door into the room behind its last offer (the stairs, on the
+// floor's last wing). Only those wings' rooms are built. Locked doors that weren't opened stay wall.
 //   floor       the wing generator's floor (for the minimap)
 //   level       level(day)
-//   route       the room numbers along the rails, first to last; room route[i] is centred i * S along them
-//   path        [{ x, y }] those rooms' centres on the tile map
-//   open[y][x]  true where you can see through; w x h tiles
-//   enemies     [{ x, y, tx, ty, s, fire }]: the notch in a wall an enemy waits in, where it steps out to, how far
-//               along the rails it is (s), and seconds until it first fires
-//   squad       4 teammates: 3 ghosts (other players' runs; names stand in until runs are used) and BOT_FEEDER
-//   t0          when the first teammate event happens (seconds)
-//   end         how far along the rails the run ends (the last room's centre)
+//   route       the room numbers of the shortest way from the first room to the goal, through open doors
+//   goal        the room behind the exit; walking into it ends the run
+//   open[y][x]  true where you can walk and see through; w x h tiles
+//   blocks      [by][bx]: the room each 7 x 7 block of the tile map is (-1 for none)
+//   near        { room: [it and the rooms through its doors] }: where an enemy in that room can see you from
+//   start       { x, y, a }: where you start (the first room's centre) and the way you face (toward the next room)
+//   exit        [[x, y]]: the exit door's tiles, shut until the enemies guarding it are down
+//   enemies     [{ x, y, tx, ty, room, guard, fire }]: the notch in a wall an enemy waits in, where it steps out to,
+//               its room, whether it guards the exit, and seconds from stepping out until it first fires
 export function corridor(seed, day) {
   const R = rng(seed), L = level(day);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
@@ -72,8 +71,8 @@ export function corridor(seed, day) {
   const rooms = floor.rooms, a = Math.max(0, L.wing - (RUN_WINGS - 1)), b = Math.max(RUN_WINGS - 1, L.wing);
   const goal = b + 1 < floor.wings.length ? floor.wings[b + 1].rooms[0] : floor.stairs;
   const shown = new Set([goal, ...floor.wings.slice(a, b + 1).flatMap((w) => w.rooms)]);
-  // the rails: the shortest way through open doors between shown rooms, from the first wing's first room to the goal
-  const start = floor.wings[a].rooms[0], prev = { [start]: -1 }, queue = [start];
+  // the shortest way through open doors between shown rooms, from the first wing's first room to the goal
+  const first = floor.wings[a].rooms[0], prev = { [first]: -1 }, queue = [first];
   while (queue.length) {
     const i = queue.shift();
     for (const j of Object.values(rooms[i].doors)) if (shown.has(j) && !(j in prev)) { prev[j] = i; queue.push(j); }
@@ -86,49 +85,65 @@ export function corridor(seed, day) {
   const r0 = Math.min(...built.map((i) => rooms[i].r)) - 1, c0 = Math.min(...built.map((i) => rooms[i].c)) - 1;
   const w = (Math.max(...built.map((i) => rooms[i].c)) - c0 + 2) * S, h = (Math.max(...built.map((i) => rooms[i].r)) - r0 + 2) * S;
   const open = Array.from({ length: h }, () => new Array(w).fill(false));
+  const blocks = Array.from({ length: h / S }, () => new Array(w / S).fill(-1));
   const corner = (i) => ({ x: (rooms[i].c - c0) * S, y: (rooms[i].r - r0) * S });
   const mid = Math.floor(S / 2);
+  const doorTiles = (i, d) => {   // a door, 3 wide, through room i's edge on side d (the next room carves its own)
+    const { x, y } = corner(i), [ux, uy] = DIRS[d], out = [];
+    for (let k = -1; k <= 1; k++) out.push([x + (ux ? (ux > 0 ? S - 1 : 0) : mid + k), y + (uy ? (uy > 0 ? S - 1 : 0) : mid + k)]);
+    return out;
+  };
+  const near = {};
   for (const i of built) {
     const { x, y } = corner(i);
+    blocks[y / S][x / S] = i;
     for (let dy = 1; dy < S - 1; dy++) for (let dx = 1; dx < S - 1; dx++) open[y + dy][x + dx] = true;
+    near[i] = [i];
     for (const [d, j] of Object.entries(rooms[i].doors)) {
       if (!shown.has(j)) continue;   // a locked door nobody opened, or a room not in today's wings: wall
-      const [ux, uy] = DIRS[d];
-      for (let k = -1; k <= 1; k++) {   // the door, 3 wide, through this room's edge (the next room carves its own)
-        const ex = ux ? (ux > 0 ? S - 1 : 0) : mid + k, ey = uy ? (uy > 0 ? S - 1 : 0) : mid + k;
-        open[y + ey][x + ex] = true;
-      }
+      for (const [tx, ty] of doorTiles(i, d)) open[ty][tx] = true;
+      near[i].push(j);
     }
   }
-  const path = route.map((i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 }));
+  const last = route.length - 1, guard = route[last - 1], c = (i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 });
+  const exit = doorTiles(guard, Object.keys(rooms[guard].doors).find((d) => rooms[guard].doors[d] === goal));
+  const s0 = c(route[0]), s1 = c(route[1]);
+  const start = { x: s0.x, y: s0.y, a: s1.x > s0.x ? 0 : s1.y > s0.y ? TURN / 4 : s1.x < s0.x ? TURN / 2 : 3 * TURN / 4 };
 
-  // Enemies wait in a notch in a room's wall and step out into the room. One alone in an early room (the 2nd or 3rd
-  // on the rails), two in the last room. A notch is in a wall with no door, never the one you came in by: on a side
-  // wall, 2 tiles past the room's centre; on the far wall, in its middle.
-  const travel = (k) => { const a = path[Math.max(0, k - 1)], b = path[Math.max(1, k)]; return [Math.sign(b.x - a.x), Math.sign(b.y - a.y)]; };
-  const spots = (k) => {
-    const i = route[k], [fx, fy] = travel(k), out = [];
+  // Enemies wait in a notch in a room's wall (a wall with no door) and step out into the room when they see you. Two
+  // guard the exit, in the room before it; the other three are dealt to the other rooms (not the first or the goal).
+  const spots = (i) => {
+    const { x, y } = corner(i), out = [];
     for (const [d, [ux, uy]] of Object.entries(DIRS)) {
-      if (rooms[i].doors[d] !== undefined || (ux === -fx && uy === -fy)) continue;
-      const ahead = ux === fx && uy === fy, along = ahead ? mid : 2;
-      const lx = ahead ? 0 : ux, ly = ahead ? 0 : uy;                  // the side the notch is on
-      const nx = path[k].x - 0.5 + (ahead ? fx * mid : fx * along + lx * mid), ny = path[k].y - 0.5 + (ahead ? fy * mid : fy * along + ly * mid);
-      out.push({ nx, ny, ux, uy, s: k * S + along });
+      if (shown.has(rooms[i].doors[d])) continue;
+      for (const k of [0, -2, 2]) out.push({ nx: x + (ux ? (ux > 0 ? S - 1 : 0) : mid + k), ny: y + (uy ? (uy > 0 ? S - 1 : 0) : mid + k), ux, uy });
     }
     return out;
   };
-  const last = route.length - 1;
-  const first = [1 + Math.floor(R() * 2), 1, 2, 3].find((k) => k < last && spots(k).length) ?? last;
-  const picks = [spots(first)[Math.floor(R() * spots(first).length)], ...spots(last).sort(() => 0).slice(0, 2)];
-  if (picks.length < 3) picks.push(spots(last)[0] || picks[0]);
-  const enemies = picks.map(({ nx, ny, ux, uy, s }) => {
-    open[ny][nx] = true;
-    return { x: nx + 0.5, y: ny + 0.5, tx: nx + 0.5 - ux * 1.35, ty: ny + 0.5 - uy * 1.35, s, fire: 2.0 + R() * 0.8 };
-  });
-  const names = [...NAMES];
-  const take = () => names.splice(Math.floor(R() * names.length), 1)[0];
-  const squad = [take(), take(), take()].map((n) => ({ n, tag: "ghost" })).concat([{ n: "BOT_FEEDER", tag: "bot" }]);
-  return { floor, level: L, route, path, open, w, h, enemies, squad, t0: 0.9 + R() * 0.4, end: last * S };
+  const others = built.filter((i) => i !== route[0] && i !== goal && i !== guard);
+  for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
+  const homes = [guard, guard];
+  for (let n = 0; homes.length < ENEMIES; n++) homes.push(others.length ? others[n % others.length] : guard);
+  const used = new Set();
+  const enemies = [];
+  for (const [n, home] of homes.entries()) {
+    // the room it was dealt, or if that has no notch left, the first room that has one
+    for (const i of [home, guard, ...others]) {
+      const sp = spots(i).filter((p) => !used.has(p.nx + "," + p.ny));
+      if (!sp.length) continue;
+      const p = sp[Math.floor(R() * sp.length)];
+      used.add(p.nx + "," + p.ny); open[p.ny][p.nx] = true;
+      enemies.push({ x: p.nx + 0.5, y: p.ny + 0.5, tx: p.nx + 0.5 - p.ux * 1.35, ty: p.ny + 0.5 - p.uy * 1.35, room: i, guard: n < 2 && i === guard, fire: 2.0 + R() * 0.8 });
+      break;
+    }
+  }
+  return { floor, level: L, route, goal, open, w, h, blocks, near, start, exit, enemies };
+}
+
+// The room tile (x, y) is in, or -1.
+export function roomOf(cor, x, y) {
+  const row = cor.blocks[Math.floor(y / S)];
+  return row ? row[Math.floor(x / S)] ?? -1 : -1;
 }
 
 // sin, cos and atan2 worked out with + - * / and Math.sqrt only, so every browser and the Worker get the same bits
@@ -154,79 +169,66 @@ export function atan2(y, x) {
   const a = atan(x / y); return y > 0 ? HALF_PI - a : -HALF_PI - a;
 }
 
-// Where you are on the rails, s tiles along them: { x, y } on the tile map and the way you face, { dx, dy }. You face
-// along the rails. At a room where they turn you stop on its centre and turn on the spot: e (0 to 1) is how far round
-// you are, in TURN_STEPS jumps of 15 degrees (a stutter, like a low frame rate). Standing on the centre you still face
-// the way you came in; once past it, the way out.
-export function along(path, s, e = 0) {
-  const n = path.length, k = Math.max(0, Math.min(n - 2, Math.ceil(s / S) - 1)), t = Math.max(0, Math.min(1, s / S - k));
-  const x = path[k].x + (path[k + 1].x - path[k].x) * t, y = path[k].y + (path[k + 1].y - path[k].y) * t;
-  const a = ang(path, k) + (t === 1 && k + 1 <= n - 2 ? turnAt(path, k + 1) * Math.floor(e * TURN_STEPS) / TURN_STEPS : 0);
-  const [dy, dx] = sincos(a);
-  return { x, y, dx, dy };
-}
-
-// The rooms on the route where the rails turn: their indexes in path, in order.
-export function turns(path) {
-  const out = [];
-  for (let j = 1; j < path.length - 1; j++) if (turnAt(path, j)) out.push(j);
-  return out;
-}
-
-const ang = (path, j) => atan2(path[j + 1].y - path[j].y, path[j + 1].x - path[j].x);
-function turnAt(path, j) {
-  let turn = ang(path, j) - ang(path, j - 1);
-  if (turn > Math.PI) turn -= 2 * Math.PI; if (turn < -Math.PI) turn += 2 * Math.PI;
-  return Math.abs(turn) < 1e-9 ? 0 : turn;
-}
-
-// What a finished run is called. Die and you fed; win while missing far more than you hit and you were tilting;
-// otherwise it was a clutch.
-export function label({ hp, shots, hits }) {
-  if (hp <= 0) return "FEED";
+// What a finished run is called. Die, or never get out, and you fed; get out while missing far more than you hit and
+// you were tilting; otherwise it was a clutch.
+export function label({ hp, shots, hits, escaped }) {
+  if (hp <= 0 || !escaped) return "FEED";
   if (shots > 2.5 * hits) return "TILT";
   return "CLUTCH";
 }
 
 // ---- a run, one tick at a time ------------------------------------------------------------------------------------
 // The whole fight is played in fixed ticks, FPS a second, with no clock and no random numbers: the same corridor and
-// the same shots (each at a tick number) always end the same way. The page plays it live; the Worker plays it again
-// from the shots the page sends (replay) and seals what it got, not what the page says it got.
+// the same inputs (each at a tick number) always end the same way. The page plays it live; the Worker plays it again
+// from the inputs the page sends (replay) and seals what it got, not what the page says it got.
+// The inputs, in the order they happened, each [tick, kind, value]:
+//   [tick, 0, keys]   the movement keys held from now on: 1 forward (W), 2 back (S), 4 left (A), 8 right (D)
+//   [tick, 1, turn]   a turn, in TURN units to the circle (+ is to the right)
+//   [tick, 2, row]    a shot at the middle column of the view, on this row (2 decimals)
 export const FPS = 15;
 export const W = 94, H = 34;          // the view window in half-size characters
+export const AIM = W / 2;             // the crosshair's column: the middle of the view
 export const AIM_MAX_Y = H - 13;      // the lowest row the crosshair goes (the gun is 11 rows and takes the bottom)
 export const COL = (15 * Math.PI / 180) / 21;   // how much further round each column of the view looks: 15 degrees is 21 columns
-export const TURN_TICKS = 36;         // a turn on the spot: 2.4 seconds
-export const SPEED = 1.25 / FPS;      // tiles along the rails per tick
+export const TURN = 4096;             // turn units to the circle
+export const WALK = 3 / FPS;          // tiles a tick, walking or strafing
+const RAD = 0.22;                     // how close you get to a wall
+const SEE = 8;                        // the furthest an enemy sees you from, in tiles
 const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ticks
-const FIRE_TICKS = 25;                // then fires every 25 ticks
+const FIRE_TICKS = 25;                // then fires every 25 ticks while it can see you
+const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
 export const ENEMY_HP = 3, HEAD_DMG = 2;   // body shots to drop an enemy; a headshot counts 2, so chest then head (a double tap) drops it
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
 export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
-export const MAX_TICKS = 9000;        // ten minutes: no run is longer
+export const MAX_TICKS = 3 * 60 * FPS;    // three minutes: then the run is over, and you didn't get out
 export const MAX_SHOTS = 2000;
+export const MAX_INPUTS = 12000;
 
 export const ticksOf = (secs) => Math.ceil(secs * FPS - 1e-9);
 export const isOpen = (cor, x, y) => x >= 0 && y >= 0 && x < cor.w && y < cor.h && cor.open[y][x];
+const shutAt = (R, x, y) => R.shut && R.cor.exit.some(([ex, ey]) => ex === x && ey === y);
+// can't walk or see through tile (x, y): a wall, or the exit while it's shut
+export const blocked = (R, x, y) => !isOpen(R.cor, x, y) || shutAt(R, x, y);
 
 export function newRun(cor) {
   return {
-    cor, tick: 0, s: 0, tt: 0, hp: HP, shots: 0, hits: 0, heads: 0, kills: 0, streak: 0, calm: 0, phase: "push", over: false, log: [],
-    turns: turns(cor.path), clutchTick: ticksOf(cor.t0 + 3.9),   // when the teammates have all fallen and it is 1 v 3
+    cor, tick: 0, x: cor.start.x, y: cor.start.y, a: cor.start.a, keys: 0, shut: true, escaped: false,
+    hp: HP, shots: 0, hits: 0, heads: 0, kills: 0, streak: 0, calm: 0, over: false, log: [],
     enemies: cor.enemies.map((e) => ({ ...e, hx: e.x, hy: e.y, state: "hidden", out: 0, dieT: 0, hp: ENEMY_HP, fire: Math.round(e.fire * FPS) })),
   };
 }
 
-export const turning = (R) => R.turns.length > 0 && R.s >= R.turns[0] * S;
-export const eyeOf = (R) => along(R.cor.path, R.s, turning(R) ? R.tt / TURN_TICKS : 0);
+const dirOf = (a) => sincos(a * 2 * Math.PI / TURN);   // [dy, dx]
+export const eyeOf = (R) => { const [dy, dx] = dirOf(R.a); return { x: R.x, y: R.y, dx, dy }; };
 
 // The crosshair shakes while you tilt (2 or more): two zig-zags, a few ticks long each, as wide as the tilt.
 const tri = (n, p) => Math.abs(((n % p) / p) * 4 - 2) - 1;
 export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (Math.min(5, R.streak) - 1) * 0.35 : 0;
 
-// Column x of the view, cast from the eye to the first wall: { d: how far, side, mx, my (the wall block), sx, sy, rdx, rdy }.
-export function cast(cor, eye, x) {
+// Column x of the view, cast from the eye to the first wall: { d: how far, side, mx, my (the wall block), door (it's
+// the shut exit), sx, sy, rdx, rdy }.
+export function cast(R, eye, x) {
   const { x: px, y: py, dx: fx, dy: fy } = eye, th = atan2(fy, fx) + (x + 0.5 - W / 2) * COL, [rdy, rdx] = sincos(th);
   let mx = Math.floor(px), my = Math.floor(py);
   const ddx = Math.abs(1 / (rdx || 1e-9)), ddy = Math.abs(1 / (rdy || 1e-9));
@@ -234,9 +236,20 @@ export function cast(cor, eye, x) {
   let sdx = rdx < 0 ? (px - mx) * ddx : (mx + 1 - px) * ddx, sdy = rdy < 0 ? (py - my) * ddy : (my + 1 - py) * ddy, side = 0;
   for (let i = 0; i < 80; i++) {
     if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
-    if (!isOpen(cor, mx, my)) break;
+    if (blocked(R, mx, my)) break;
   }
-  return { d: side === 0 ? sdx - ddx : sdy - ddy, side, mx, my, sx, sy, rdx, rdy };
+  return { d: side === 0 ? sdx - ddx : sdy - ddy, side, mx, my, door: shutAt(R, mx, my), sx, sy, rdx, rdy };
+}
+
+// Can an enemy at (x, y) see you? Only from your room or one next to it (so a tick checks a few enemies, not all),
+// within SEE tiles, with nothing in the way: the line between is walked in quarter tiles.
+function sees(R, e) {
+  if (!R.cor.near[e.room].includes(roomOf(R.cor, R.x, R.y))) return false;
+  const dx = R.x - e.x, dy = R.y - e.y, d = Math.sqrt(dx * dx + dy * dy);
+  if (d > SEE) return false;
+  const n = Math.ceil(d * 4);
+  for (let k = 1; k < n; k++) if (blocked(R, Math.floor(e.x + dx * k / n), Math.floor(e.y + dy * k / n))) return false;
+  return true;
 }
 
 // Where an enemy is on the view: { sxc, ry (how far), l, rr (columns), top, bot (rows), sh }, or null if it can't be seen.
@@ -253,55 +266,77 @@ export function enemyBox(eye, e) {
   return { sxc, ry, sh, l: Math.round(sxc - sw / 2), rr: Math.round(sxc + sw / 2), top, bot };
 }
 
-// One tick. Returns the things that happened that the page shows: "hurt" when an enemy hit you.
+// Walk: the keys held, at WALK a tick, sliding along walls (x and y are tried apart).
+function walk(R) {
+  const k = R.keys, f = (k & 1 ? 1 : 0) - (k & 2 ? 1 : 0), s = (k & 8 ? 1 : 0) - (k & 4 ? 1 : 0);
+  if (!f && !s) return;
+  const [dy, dx] = dirOf(R.a), m = (f && s ? Math.SQRT1_2 : 1) * WALK;
+  const free = (x, y) => !blocked(R, Math.floor(x - RAD), Math.floor(y - RAD)) && !blocked(R, Math.floor(x + RAD), Math.floor(y - RAD))
+    && !blocked(R, Math.floor(x - RAD), Math.floor(y + RAD)) && !blocked(R, Math.floor(x + RAD), Math.floor(y + RAD));
+  const nx = R.x + (dx * f - dy * s) * m, ny = R.y + (dy * f + dx * s) * m;
+  if (free(nx, R.y)) R.x = nx;
+  if (free(R.x, ny)) R.y = ny;
+}
+
+// One tick. Returns the things that happened that the page shows: "hurt" when an enemy hit you, "open" when the exit
+// opened.
 export function tick(R) {
   const ev = [];
   if (R.over) return ev;
-  const E = R.enemies, cor = R.cor;
   R.tick++;
-  if (R.tick >= R.clutchTick) R.phase = "clutch";
-  const active = E.filter((e) => e.state === "stepping" || e.state === "out");
-  const next = E.find((e) => e.state === "hidden" && e.s - R.s < 4.2);
-  if (next && R.phase !== "push") E.filter((e) => e.state === "hidden" && Math.abs(e.s - next.s) < 2).forEach((e) => e.state = "stepping");
-  const stopAt = Math.min(...E.filter((e) => e.state === "hidden").map((e) => e.s - 4.0), cor.end);
-  if (!active.length && !next) {
-    // walk to the centre of the next room where the rails turn, turn there on the spot, then walk on
-    const j = R.turns[0];
-    if (turning(R)) { R.tt++; if (R.tt >= TURN_TICKS) { R.turns.shift(); R.tt = 0; R.s = j * S + 1e-6; } }
-    else R.s = Math.min(stopAt, j === undefined ? Infinity : j * S, R.s + SPEED);
-  }
-  for (const e of E) {
-    if (e.state === "stepping") { e.out = Math.min(1, e.out + 1 / STEP_TICKS); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }
+  walk(R);
+  if (roomOf(R.cor, R.x, R.y) === R.cor.goal) { R.escaped = true; R.over = true; return ev; }
+  for (const e of R.enemies) {
+    if (e.state === "hidden") { if (sees(R, e)) e.state = "stepping"; }
+    else if (e.state === "stepping") { e.out = Math.min(1, e.out + 1 / STEP_TICKS); e.x = e.hx + (e.tx - e.hx) * e.out; e.y = e.hy + (e.ty - e.hy) * e.out; if (e.out >= 1) e.state = "out"; }
     else if (e.state === "out") {
-      if (--e.fire <= 0) {
+      if (!sees(R, e)) e.fire = Math.max(e.fire, REACT_TICKS);
+      else if (--e.fire <= 0) {
         e.fire = FIRE_TICKS; R.hp--; ev.push("hurt");
         if (R.hp <= 0) { R.hp = 0; R.over = true; return ev; }
       }
     } else if (e.state === "dying") { if (++e.dieT >= DIE_TICKS) e.state = "dead"; }
   }
-  if (E.every((e) => e.state === "dead") && R.s >= cor.end - 0.01) R.over = true;
+  if (R.shut && R.enemies.every((e) => !e.guard || e.state === "dying" || e.state === "dead")) { R.shut = false; ev.push("open"); }
+  if (R.tick >= MAX_TICKS) R.over = true;
   return ev;
+}
+
+// The movement keys held from now on (a bit each: 1 W, 2 S, 4 A, 8 D). Logged only when they change.
+export function press(R, keys) {
+  keys &= 15;
+  if (R.over || keys === R.keys) return;
+  R.keys = keys; R.log.push([R.tick, 0, keys]);
+}
+
+// Turn by d TURN units (a whole number; + is to the right). Turns in the same tick are logged as one.
+export function turn(R, d) {
+  if (R.over || !d) return;
+  R.a = (((R.a + d) % TURN) + TURN) % TURN;
+  const last = R.log[R.log.length - 1];
+  if (last && last[0] === R.tick && last[1] === 1) { last[2] += d; if (!last[2]) R.log.pop(); }
+  else R.log.push([R.tick, 1, d]);
 }
 
 // Is (col, row) on an enemy's head? Exactly the @ the page draws: its top HEAD of rows, its middle columns (no spare row
 // above, as the body has), so far away, where the head is a row or two, a headshot is hard.
 export const onHead = (b, c, r) => r >= b.top && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
 
-// A shot at (col, row) of the view, now. Every shot counts, with or without anything to shoot at. Returns false for a
-// shot at nothing, "miss" for a miss with an enemy on the view, "body" or "head" for a hit that leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a
-// headshot that drops it, or null if the run is over. The aim is kept to 2 decimals (that is what the log holds).
-export function fire(R, col, row) {
+// A shot at the middle column of the view, on this row, now. Every shot counts, with or without anything to shoot at.
+// Returns false for a shot at nothing, "miss" for a miss with an enemy on the view, "body" or "head" for a hit that
+// leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a headshot that drops it, or null if the run
+// is over. The row is kept to 2 decimals (that is what the log holds); the log gets [tick, 2, row, hit].
+export function fire(R, row) {
   if (R.over) return null;
-  const q = (v) => Math.round(v * 100) / 100;
-  col = q(col); row = q(row);
+  row = Math.round(row * 100) / 100;
   R.shots++;
-  const c = Math.round(col + jit(R)), r = Math.round(row), eye = eyeOf(R);
-  const wall = cast(R.cor, eye, Math.max(0, Math.min(W - 1, c))).d;
+  const c = Math.round(AIM + jit(R)), r = Math.round(row), eye = eyeOf(R);
+  const wall = cast(R, eye, Math.max(0, Math.min(W - 1, c))).d;
   const up = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }));
   const hit = up
     .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
     .sort((a, b) => a.b.ry - b.b.ry)[0];
-  const seen = up.some(({ b }) => b && b.rr >= 0 && b.l < W);
+  const seen = up.some(({ b }) => b && b.rr >= 0 && b.l < W && wall > b.ry);
   let got = seen ? "miss" : false;
   if (hit) {
     const head = onHead(hit.b, c, r);
@@ -316,27 +351,31 @@ export function fire(R, col, row) {
     // and always leaves the bar at least half full (TILT_HALF of 5)
     R.streak = seen ? Math.max(TILT_HALF, R.streak + TILT_SEEN) : R.streak + TILT_BLIND; R.calm = 0;
   }
-  R.log.push([R.tick, col, row, hit ? 1 : 0]);
+  R.log.push([R.tick, 2, row, hit ? 1 : 0]);
   return got;
 }
 
-// Play a run again from its shots: [[tick, col, row], ...] in order. Returns the finished run (hp, shots, hits, log: one
-// [tick, col, row, hit] per shot), or null if the shots are not a run: malformed, out of order, aimed off the view, or the
-// run did not end.
-export function replay(cor, shots) {
-  if (!Array.isArray(shots) || shots.length > MAX_SHOTS) return null;
-  let last = 0;
-  for (const s of shots) {
+// Play a run again from its inputs ([tick, kind, value], in order: see above). Returns the finished run (hp, shots, hits,
+// escaped, log), or null if the inputs are not a run: malformed, out of order, or after the run ended. onTick(R), if
+// given, is called after every tick (the page uses it to follow a ghost teammate).
+export function replay(cor, inputs, onTick) {
+  if (!Array.isArray(inputs) || inputs.length > MAX_INPUTS) return null;
+  let last = 0, shots = 0;
+  for (const s of inputs) {
     if (!Array.isArray(s) || s.length !== 3 || !Number.isInteger(s[0]) || s[0] < last || s[0] > MAX_TICKS) return null;
-    if (!(Number.isFinite(s[1]) && Number.isFinite(s[2]) && s[1] >= 0 && s[1] <= W - 1 && s[2] >= 1 && s[2] <= AIM_MAX_Y)) return null;
+    const [, k, v] = s;
+    if (k === 0 ? !(Number.isInteger(v) && v >= 0 && v <= 15)
+      : k === 1 ? !(Number.isInteger(v) && v !== 0 && Math.abs(v) <= 4 * TURN)
+      : k === 2 ? !(Number.isFinite(v) && v >= 1 && v <= AIM_MAX_Y && ++shots <= MAX_SHOTS)
+      : true) return null;
     last = s[0];
   }
-  const R = newRun(cor);
-  for (const [t, col, row] of shots) {
-    while (!R.over && R.tick < t) tick(R);
-    if (R.over) return null;   // a shot after the run ended
-    fire(R, col, row);
+  const R = newRun(cor), step = () => { tick(R); if (onTick) onTick(R); };
+  for (const [t, k, v] of inputs) {
+    while (!R.over && R.tick < t) step();
+    if (R.over) return null;   // an input after the run ended
+    if (k === 0) press(R, v); else if (k === 1) turn(R, v); else fire(R, v);
   }
-  while (!R.over && R.tick < MAX_TICKS) tick(R);
-  return R.over ? R : null;
+  while (!R.over) step();
+  return R;
 }

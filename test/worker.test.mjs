@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import worker, { setClock } from "../src/worker.js";
 import * as C from "../public/engine/corridor.js";
+import { playBot } from "./bot.mjs";
 const { level } = C;
 
 // a tiny D1 lookalike (copied from scoundrel.exe test/worker.test.mjs)
@@ -93,7 +94,7 @@ const dayRec = (day) => { const L = level(day); return JSON.stringify({ day, lev
 test("the day's seed: the first 4 bytes of the hash of the day's ledger entry; /api/today gives the UTC day, its seed, your name and your run", async () => {
   const { env, call } = setup();
   const t = await call("ann", "GET", "/api/today"), dayHash = sha("0".repeat(64) + "|" + dayRec("2027-01-01"));
-  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), name: null, run: null });
+  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), name: null, run: null, ghosts: [] });
   assert.equal((await call("bo", "GET", "/api/today")).seed, t.seed, "the same seed for everyone");
   assert.deepEqual(env.DB.raw.prepare("SELECT kind, record, hash FROM ledger").all().map((r) => ({ ...r })),
     [{ kind: "day", record: dayRec("2027-01-01"), hash: dayHash }], "one day entry, sealed by the first request");
@@ -144,45 +145,42 @@ test("the migrations build the same tables as schema.sql", () => {
   old.exec(readFileSync(new URL("../migrations/001_players.sql", import.meta.url), "utf8"));
   old.exec(readFileSync(new URL("../migrations/002_ledger.sql", import.meta.url), "utf8"));
   old.exec(readFileSync(new URL("../migrations/003_day_entries.sql", import.meta.url), "utf8"));
+  old.exec(readFileSync(new URL("../migrations/004_runs_day.sql", import.meta.url), "utf8"));
   const shape = (d) => d.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'index') AND name NOT LIKE 'sqlite_%' ORDER BY name").all()
     .map((r) => r.name + ":" + d.prepare(`SELECT group_concat(name || ' ' || type || ' ' || "notnull", ',') AS c FROM pragma_table_info('${r.name}')`).get().c);
   assert.deepEqual(shape(old), shape(fresh));
 });
 
-test("a run is sealed on the ledger: the server plays it again from its shots, seals what it got, one a day, chained by SHA-256(prev + '|' + record)", async () => {
+test("a run is sealed on the ledger: the server plays it again from its inputs, seals what it got, one a day, chained by SHA-256(prev + '|' + record)", async () => {
   const { env, call } = setup();
   const day = "2027-01-01", dayHash = sha("0".repeat(64) + "|" + dayRec(day)), seed = parseInt(dayHash.slice(0, 8), 16);
-  // played the way the page plays it (as in engine.test.mjs): a shot at each enemy once it's out, and some misses
-  const live = C.newRun(C.corridor(seed, day));
-  while (!live.over) {
-    if (live.tick % 9 === 2) C.fire(live, 12.25, 18.5);
-    for (const e of live.enemies) if (e.state === "out" && e.fire < 12) { const bx = C.enemyBox(C.eyeOf(live), e); if (bx) C.fire(live, bx.sxc, (bx.top + bx.bot) / 2); }
-    C.tick(live);
-  }
-  assert.equal(live.kills, 3);
-  const shots = live.log.map((s) => s.slice(0, 3));
-  assert.equal((await call("ann", "POST", "/api/run", { day, shots: [shots[1], shots[0], ...shots.slice(2)] })).status, 400, "out of order");
-  assert.equal((await call("ann", "POST", "/api/run", { day, shots: [...shots, [live.tick + 1, 40, 10]] })).status, 400, "a shot after the end");
-  assert.equal((await call("ann", "POST", "/api/run", { day: "2026-12-31", shots })).status, 409, "yesterday's corridor");
+  // played the way the page plays it (as in engine.test.mjs): walk to the exit, shoot what comes out, and some misses
+  const live = playBot(C.corridor(seed, day), { shootWall: 9 });
+  assert.ok(live.escaped && live.shots > live.hits);
+  const inputs = live.log.map((s) => s.slice(0, 3));
+  const sh = inputs.findIndex((s) => s[1] === 2);
+  assert.equal((await call("ann", "POST", "/api/run", { day, inputs: [inputs[sh], ...inputs.slice(0, sh), ...inputs.slice(sh + 1)] })).status, 400, "out of order");
+  assert.equal((await call("ann", "POST", "/api/run", { day, inputs: [...inputs, [live.tick + 1, 2, 10]] })).status, 400, "a shot after the end");
+  assert.equal((await call("ann", "POST", "/api/run", { day: "2026-12-31", inputs })).status, 409, "yesterday's corridor");
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM ledger WHERE kind = 'run'").get().n, 0, "no run sealed so far");
 
   // what the page says it got is ignored: the server's replay decides
-  const a = await call("ann", "POST", "/api/run", { day, shots, hp: 1, hits: 0, label: "FEED" });
+  const a = await call("ann", "POST", "/api/run", { day, inputs, hp: 1, hits: 0, label: "FEED" });
   assert.equal(a.status, 200);
   assert.deepEqual([a.run.hp, a.run.shots, a.run.hits, a.run.label], [live.hp, live.shots, live.hits, C.label(live)], "the same run as played");
   const annId = env.DB.raw.prepare("SELECT id FROM players").get().id;
-  const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: live.hits, label: C.label(live), log: live.log });
+  const rec1 = JSON.stringify({ day, player: annId, hp: live.hp, shots: live.shots, hits: live.hits, label: C.label(live), inputs: live.log });
   assert.equal(a.run.hash, sha(dayHash + "|" + rec1), "the first run chains from the day's entry");
   assert.deepEqual(env.REGISTRY.sent, [{ game: "clutch-feed-tilt", entries: 2, head: a.run.hash, detail: { day, label: C.label(live), hp: live.hp, hits: live.hits, shots: live.shots } }], "the registry got a checkpoint: the day and the run, the run's hash as the head, and the run's day, label, HP, hits and shots");
   assert.equal((await call("ann", "GET", "/api/today")).run.entry, a.run.entry, "today shows your sealed run");
-  assert.equal((await call("ann", "POST", "/api/run", { day, shots })).status, 409, "one run a day");
+  assert.equal((await call("ann", "POST", "/api/run", { day, inputs })).status, 409, "one run a day");
 
-  // a second player who never shot: the enemies win, 3 HP gone, 0 hits
+  // a second player who never moved: nobody sees them, the time runs out, and they never got out
   env.REGISTRY.checkpoint = async () => { throw new Error("registry away"); };   // a registry that's away never stops a run
-  const b = await call("bo", "POST", "/api/run", { day, shots: [], hp: 3, hits: 3 });
-  assert.deepEqual([b.run.hp, b.run.shots, b.run.hits, b.run.label], [0, 0, 0, "FEED"]);
+  const b = await call("bo", "POST", "/api/run", { day, inputs: [], hp: 3, hits: 3 });
+  assert.deepEqual([b.run.hp, b.run.shots, b.run.hits, b.run.label], [3, 0, 0, "FEED"]);
   const boId = env.DB.raw.prepare("SELECT MAX(id) AS id FROM players").get().id;
-  const rec2 = JSON.stringify({ day, player: boId, hp: 0, shots: 0, hits: 0, label: "FEED", log: [] });
+  const rec2 = JSON.stringify({ day, player: boId, hp: 3, shots: 0, hits: 0, label: "FEED", inputs: [] });
   assert.equal(b.run.hash, sha(a.run.hash + "|" + rec2));
   assert.deepEqual(env.DB.raw.prepare("SELECT record FROM ledger ORDER BY id").all().map((r) => r.record), [dayRec(day), rec1, rec2], "records hold ids, never names");
   assert.equal(env.DB.raw.prepare("SELECT COUNT(*) AS n FROM runs").get().n, 2);
@@ -192,4 +190,23 @@ test("a run is sealed on the ledger: the server plays it again from its shots, s
   assert.deepEqual(all.entries.map((e) => [e.kind, e.record, e.hash]), [["run", rec2, b.run.hash], ["run", rec1, a.run.hash], ["day", dayRec(day), dayHash]]);
   const page = await call("ann", "GET", `/api/ledger?limit=1&before=${all.entries[0].id}`);
   assert.deepEqual(page.entries.map((e) => e.hash), [a.run.hash]);
+});
+
+test("ghosts: /api/today gives up to 3 other players' runs that day, newest first, with their names and inputs (not yours, not other days')", async () => {
+  const { env, call } = setup();
+  const day = "2027-01-01", seed = (await call("x", "GET", "/api/today")).seed;
+  const live = playBot(C.corridor(seed, day)), inputs = live.log.map((s) => s.slice(0, 3));
+  for (const [i, who] of ["ann", "bo", "cy", "di", "ed"].entries()) {
+    setClock(() => T0 + i * 3601);   // an hour apart, under the new-player limit, all on the same UTC day
+    await call(who, "POST", "/api/codes", { action: "new" });   // a player with a name
+    assert.equal((await call(who, "POST", "/api/run", { day, inputs })).status, 200);
+  }
+  const name = (who) => env.DB.raw.prepare("SELECT name FROM players ORDER BY id LIMIT 1 OFFSET ?").get(["ann", "bo", "cy", "di", "ed"].indexOf(who)).name;
+  // a run sealed before v0.11 (no inputs in its record) is left out
+  env.DB.raw.prepare("UPDATE ledger SET record = json_remove(record, '$.inputs') WHERE run_id = (SELECT MAX(id) FROM runs)").run();
+  const t = await call("ann", "GET", "/api/today");
+  assert.deepEqual(t.ghosts.map((g) => g.name), [name("di"), name("cy")], "ed's run is old-style; ann's own is left out; at most 3 read");
+  assert.deepEqual(t.ghosts[0].inputs, inputs, "the inputs as sent, to play again");
+  const plan = env.DB.raw.prepare("EXPLAIN QUERY PLAN SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT 3").all(day, 1);
+  assert.ok(plan.some((r) => /USING INDEX runs_day/.test(r.detail)), "read through the runs_day index: " + JSON.stringify(plan.map((r) => r.detail)));
 });

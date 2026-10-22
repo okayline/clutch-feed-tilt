@@ -1,10 +1,11 @@
 // CLUTCH FEED TILT Worker. The page and its files are static assets; /api/* comes here first.
 //
-//   GET  /api/today                    { day, seed, name, run }: today's date in UTC (from the server's clock, so a wrong
-//                                      phone clock can't pick another day), its seed, your name if you have a player, and
-//                                      your run today if you've sealed one
-//   POST /api/run {day, shots}         seal today's run on the ledger (one per player per day): the server plays it
-//                                      again from its shots, [[tick, col, row], ...], and seals what it got
+//   GET  /api/today                    { day, seed, name, run, ghosts }: today's date in UTC (from the server's clock, so a
+//                                      wrong phone clock can't pick another day), its seed, your name if you have a player,
+//                                      your run today if you've sealed one, and up to 3 other players' sealed runs today
+//                                      (name and inputs) for your ghost teammates
+//   POST /api/run {day, inputs}        seal today's run on the ledger (one per player per day): the server plays it
+//                                      again from its inputs, [[tick, kind, value], ...] (corridor.js), and seals what it got
 //   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
 //   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
@@ -145,7 +146,20 @@ const withCookie = (res, cookie) => { for (const c of [cookie].flat()) if (c) re
 async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
-  return json({ day, seed: await daySeed(env, day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null });
+  return json({ day, seed: await daySeed(env, day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null,
+                ghosts: await ghostsOf(env, day, player ? player.id : 0) });
+}
+
+// Up to GHOSTS other players' sealed runs that day, newest first: their name and inputs, for the page to play beside you.
+// Read through the runs_day index (day, id), so it reads a few rows however many runs there are. Runs sealed before
+// v0.11 have no inputs to play and are left out.
+const GHOSTS = 3;
+async function ghostsOf(env, day, playerId) {
+  const { results } = await env.DB.prepare(
+    `SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id
+     WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT ?`).bind(day, playerId, GHOSTS).all();
+  return results.map((g) => ({ name: g.name, inputs: JSON.parse(g.record).inputs })).filter((g) => g.inputs)
+    .map((g) => ({ name: g.name, inputs: g.inputs.map((s) => s.slice(0, 3)) }));
 }
 
 // ---------- runs and the ledger ----------
@@ -157,20 +171,19 @@ async function runOf(env, playerId, day) {
      WHERE r.player_id = ? AND r.day = ?`).bind(playerId, day).first();
 }
 
-// Seal today's run. The page sends only its shots, each at a tick of the fight; the run is played again here from
-// today's corridor and those shots (corridor.js replay, the same code the page plays), and what that gives is sealed:
-// HP, shots, hits and the label, with the shot log ([tick, col, row, hit] per shot). Shots that aren't a finished run
-// (out of order, off the view, after the end, or a run that never ends) are refused. The run and its ledger entry are
-// one D1 batch.
+// Seal today's run. The page sends only its inputs (keys, turns and shots), each at a tick of the fight; the run is
+// played again here from today's corridor and those inputs (corridor.js replay, the same code the page plays), and what
+// that gives is sealed: HP, shots, hits and the label, with the inputs ([tick, 2, row, hit] for a shot). Inputs that
+// aren't a run (malformed, out of order, or after the end) are refused. The run and its ledger entry are one D1 batch.
 async function saveRun(req, env) {
   const b = await body(req), day = utcDay();
   if (b.day !== day) throw new Oops("That day's corridor is over. This run can't be sealed.", 409);
-  const R = C.replay(C.corridor(await daySeed(env, day), day), b.shots);
+  const R = C.replay(C.corridor(await daySeed(env, day), day), b.inputs);
   if (!R) throw new Oops("That run doesn't add up. It wasn't sealed.");
   const { hp, shots, hits, log } = R;
   const { player, cookie } = await needPlayer(req, env);
-  const label = C.label({ hp, shots, hits });
-  const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, log });
+  const label = C.label(R);
+  const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, inputs: log });
   const done = () => runOf(env, player.id, day);
   if (await done()) throw new Oops("You've already sealed a run today. A new corridor opens at midnight UTC.", 409);
   for (let i = 0; i < 3; i++) {
