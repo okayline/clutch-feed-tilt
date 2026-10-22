@@ -70,7 +70,7 @@ const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t
 // nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
 // close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
 // underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
-const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42;   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2;   // then FRAGGED holds, and fades out like GTA's WASTED   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
 const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
 // The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
@@ -94,6 +94,7 @@ function startWipe(old, cardOf, then, speed = MELT_SPEED) {
   if (reduced) { if (then) then(); return; }
   wipe = { oldCh: old && old.ch, oldCl: old && old.cl, card: cardOf, t: 0, d: meltDelays(), then, speed };
 }
+const FRAGGED = card([["F R A G G E D", "e"]]);
 const snapshot = () => ({ ch: ch.map((r) => r.slice()), cl: cl.map((r) => r.slice()) });
 // draw the melt over what render() put in ch and cl; true when every column is off the bottom
 function drawWipe() {
@@ -264,6 +265,7 @@ function render() {
 
   if (dying()) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";   // red while you fall
   if (wipe && drawWipe()) wipe.done = true;
+  else if (dying() && P.fragT !== undefined) for (let y = 0; y < H; y++) { ch[y] = FRAGGED.ch[y].slice(); cl[y] = FRAGGED.cl[y].slice(); }
   let out = "";
   for (let y = 0; y < H; y++) {
     let run = "", k = cl[y][0];
@@ -489,7 +491,12 @@ function step(dt) {
     const tgt = P.killer ? Math.atan2(P.killer.y - P.y, P.killer.x - P.x) : P.viewA;   // turn to face them, 75 degrees a second
     let dA = tgt - P.viewA; dA -= Math.round(dA / (2 * Math.PI)) * 2 * Math.PI;
     P.viewA += Math.sign(dA) * Math.min(Math.abs(dA), 75 * Math.PI / 180 * dt);
-    if (P.deathT >= MELT_AT && !wipe && !P.melting) { P.melting = true; startWipe(null, card([["F R A G G E D", "e"]]), finish, MELT_SPEED / 2); }
+    if (P.deathT >= MELT_AT && !wipe && !P.melting) { P.melting = true; startWipe(null, FRAGGED, () => { P.fragT = 0; }, MELT_SPEED / 2); }
+    if (P.fragT !== undefined) {
+      P.fragT += dt;
+      $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
+      if (P.fragT >= FRAG_HOLD + FRAG_FADE) { finish(); $("screen").style.opacity = ""; }
+    }
     return;
   }
   for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
