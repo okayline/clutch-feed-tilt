@@ -61,6 +61,7 @@ const ghostAt = (m) => m.track[Math.max(0, Math.min(m.track.length, P.done ? Inf
 // Enemies glitch: each frame a few of their cells show a scrambled glyph, like a demon's words decoding in 4Dungeon
 // (daily-dungeon index.html VOICE_GLYPHS, less the @ so only a head is ever an @). Only the drawing: a shot is still
 // checked against corridor.js cell().
+const WIPE = 1.2;   // seconds a downed enemy takes to be wiped out (drawing only; the engine has it down at once)
 const SPIN_TICKS = 3;   // a drone's rotors turn every 3 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = { short: 0.25, tall: 0.25, drone: 0.1 }, GLITCH_HOLD = 2;   // a drone glitches less; a scrambled glyph stays 2 frames
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
@@ -160,17 +161,27 @@ function render() {
   // the same boxes and shapes the engine checks a shot against (corridor.js enemyBox, cell)
   // and ghost teammates, drawn in the ghost colour with an o for a head
   const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost", kind: "ghost" }));
+  // a downed enemy is wiped out digitally over WIPE seconds: drawn at full size (not the engine's shrinking box), its rows
+  // erased from the top down behind a band of glitch, the rest glitching more and more. Drawing only.
+  const wipeOf = (e) => e.diedAt === undefined ? -1 : (P.tick - e.diedAt) / (WIPE * C.FPS);
   const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
-    .map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
+    .map((e) => [e, wipeOf(e) >= 1 ? null : C.enemyBox(E, wipeOf(e) >= 0 ? { ...e, state: "out" } : e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
   for (const [e, b] of vis) {
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-        let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS));
-        if (c === "@" && k === "h") c = "o";
-        else if (c && k === "e") { const t = Math.floor(P.tick / GLITCH_HOLD); if (noise(x, y, t) < GLITCH[b.kind]) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
-        if (c) put(x, y, c, k);
+        let c = C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS)), kk = k;
+        const w = wipeOf(e), t = Math.floor(P.tick / GLITCH_HOLD);
+        if (c && w >= 0) {   // being wiped: gone above the line, a bright glitch band at it, glitching below
+          const f = (y - b.top) / Math.max(1, b.bot - b.top);
+          if (f < w) c = "";
+          else if (f < w + 0.18) { c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; kk = "g"; }
+          else if (noise(x, y, t) < 0.3 + 0.6 * w) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)];
+        }
+        else if (c === "@" && k === "h") c = "o";
+        else if (c && k === "e") { if (noise(x, y, t) < GLITCH[b.kind]) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
+        if (c) put(x, y, c, kk);
       }
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
@@ -424,6 +435,7 @@ function step(dt) {
       P.hurt = 0.25; say("ENEMY tagged YOU", "e");
       if (!reduced) { $("game").classList.remove("shake"); void $("game").offsetWidth; $("game").classList.add("shake"); }
     } else if (ev === "open") say("THE EXIT IS OPEN", "g");
+    for (const e of enemies) if ((e.state === "dying" || e.state === "dead") && e.diedAt === undefined) e.diedAt = P.tick;
     const r = C.roomOf(cor, P.x, P.y);
     if (r >= 0 && r !== P.seen[P.seen.length - 1]) { P.seen = P.seen.filter((i) => i !== r).concat(r); }
     // what the ghosts did on this tick of their runs
