@@ -1,4 +1,4 @@
-// CLUTCH FEED TILT. The rules, shared by the page and the tests. Pure functions only: no network, no storage.
+// TILT.EXE. The rules, shared by the page and the tests. Pure functions only: no network, no storage.
 //
 // Each UTC day has one map, the same for everyone. Its wings are the real 4Dungeon floor of that moon quarter
 // (level(day)); the day's ledger entry gives the seed (/api/today) that opens its doors. corridor(seed, day) lays out the rooms and the rails through them, the enemies' notches and when they fire, and who your

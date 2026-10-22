@@ -162,7 +162,7 @@ function frame(message) {
   const dash = "+" + "-".repeat(FW - 2) + "+";
   // the day's 4Dungeon level and wing (corridor.js level), so you can tell which floor today's corridor is
   const lv = day ? C.level(day) : null;
-  const head = seg([[" CLUTCH FEED TILT", "b"], ["                   ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${lv.wing + 1}` : "", "t"],
+  const head = seg([[" TILT.EXE", "b"], ["                           ", ""], [lv ? `${day}  4DUNGEON ${lv.name} WING ${lv.wing + 1}` : "", "t"],
                     [day ? `  SEED ${SEED.toString(16).toUpperCase().padStart(8, "0").slice(0, 4)}` : "", "d"]], FW - 2);
   if (message) {
     const L = [top, "|" + head + "|", mid];
