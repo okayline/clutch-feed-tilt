@@ -70,12 +70,17 @@ export function level(day) {
 //               its room, whether it guards the exit, seconds from stepping out until it first fires, and its kind
 //               (KINDS, in turn)
 export function corridor(seed, day, wing) {
-  const R = rng(seed), L = level(day), b = Math.max(RUN_WINGS - 1, wing - 1), a = b - (RUN_WINGS - 1);
+  const R = rng(seed), L = level(day);
+  let b = Math.max(RUN_WINGS - 1, wing - 1);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
   for (let n = 0; n <= b && FLOOR.lockedDoors(floor).length; n++) {   // open doors until the wing behind the run's last is built
     const doors = FLOOR.lockedDoors(floor);
     FLOOR.growDoor(floor, doors[Math.floor(R() * doors.length)]);
   }
+  // Some floors end early: the doors opened lead to a last wing with no locked doors and no stairs. Then the run ends
+  // a wing sooner, so the goal is that last wing's first room.
+  if (b + 1 >= floor.wings.length && !(floor.stairs >= 0)) b = floor.wings.length - 2;
+  const a = b - (RUN_WINGS - 1);
   const rooms = floor.rooms;
   const goal = b + 1 < floor.wings.length ? floor.wings[b + 1].rooms[0] : floor.stairs;
   const shown = new Set([goal, ...floor.wings.slice(a, b + 1).flatMap((w) => w.rooms)]);

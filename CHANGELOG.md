@@ -4,6 +4,13 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.18.3 — "Dead End"
+**Wed Oct 21, 2026 · 7:46 PM HST**
+
+- On a floor whose doors lead to a last wing with no way on (no locked doors and no stairs), the run now ends a wing sooner, at that last wing. Removed: the corridor failing to build on those days when 4Dungeon's players were far along, which left the game unable to load and runs unable to be sealed until midnight UTC. Every other day's corridor is unchanged.
+
+---
+
 ## v0.18.2 — "Light Check"
 **Wed Oct 21, 2026 · 7:40 PM HST**
 
