@@ -75,7 +75,7 @@ const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
 // The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
 // its own short delay with its neighbours close behind, uncovering the new one; digital here, with a band of red glitch
-// along each column's top edge. Used when the corridor first shows (off a title card), on Run It Back (off the last
+// along each column's top edge. Used when the corridor first shows (off a title card, T I L T . E X E), on Run It Back (off the last
 // frame), when you get out (onto YOU GOT OUT) and when you die (onto FRAGGED). The fight waits while it runs. Drawing only;
 // skipped with Reduce Motion.
 let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live view), t, d (each column's delay), then }
@@ -650,6 +650,6 @@ frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
   day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
   if (t.run) showSealed(t.run);
-  else { build(); const lv = C.level(day); startWipe(card([["T I L T . E X E", "b"], ["", ""], [`${day}  4DUNGEON ${lv.name} WING ${WING}`, "t"]])); }
+  else { build(); startWipe(card([["T I L T . E X E", "b"]])); }
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
