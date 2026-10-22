@@ -272,7 +272,7 @@ export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (M
 // A shot at range goes a little wide, and nothing on the screen moves to show it: an enemy on the view further than
 // NEAR tiles adds SPREAD columns (and a little under half as many rows, a row being taller) for every tile past NEAR
 // (up to FAR_MAX of them), swinging with the tick, so a far shot has to be timed. Returns [columns, rows].
-export const NEAR = 5, SPREAD = 0.2, FAR_MAX = 10;
+export const NEAR = 5, SPREAD = 0.4, FAR_MAX = 10;
 export function scatter(R) {
   const eye = eyeOf(R);
   let near = Infinity;
