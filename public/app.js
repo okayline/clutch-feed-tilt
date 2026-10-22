@@ -81,7 +81,9 @@ function render() {
     const pd = Math.max(0.3, Math.hypot(fcx - px, fcy - py)), id = mx + "," + my + "," + side;
     const wh = H / Math.max(0.3, d), top = Math.round(H / 2 - wh / 2), bot = Math.round(H / 2 + wh / 2);
     const r = Math.min(RAMP.length - 1, Math.floor(pd / 1.6) + (side === 1 ? 1 : 0));
-    const seam = x > 0 && id !== prev && pd < 9; prev = id;
+    // every block's edge is drawn, however far: on a wall running away from you they crowd together, which is what
+    // shows it going away
+    const seam = x > 0 && id !== prev; prev = id;
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
       // the exit, while it's shut: a gold door
       if (door) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "=", "g");
