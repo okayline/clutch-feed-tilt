@@ -99,23 +99,18 @@ function render() {
     }
   }
   // enemies, far to near
-  // the same boxes the engine checks a shot against (corridor.js enemyBox)
+  // the same boxes and shapes the engine checks a shot against (corridor.js enemyBox, cell)
   // and ghost teammates, drawn in the ghost colour with an o for a head
-  const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost" }));
+  const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost", kind: "ghost" }));
   const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
     .map((e) => [e, C.enemyBox(E, e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
-  for (const [e, { sxc, ry, sh, l, rr, top, bot }] of vis) {
-    const k = e.state === "ghost" ? "h" : "e";
+  for (const [e, b] of vis) {
+    const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
-      const u = (x - l) / Math.max(1, rr - l);
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
-        const f = (y - top) / Math.max(1, sh);
-        let c = "";
-        if (e.state === "dying") c = "%";
-        else if (f < C.HEAD) c = Math.abs(u - 0.5) < C.HEAD_W ? (k === "h" ? "o" : "@") : "";
-        else if (f < 0.6) c = Math.abs(u - 0.5) < 0.36 ? "#" : (f > 0.3 && f < 0.42 && u > 0.5) ? "=" : "";
-        else c = (Math.abs(u - 0.3) < 0.11 || Math.abs(u - 0.7) < 0.11) ? "|" : "";
+        let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / 3));
+        if (c === "@" && k === "h") c = "o";
         if (c) put(x, y, c, k);
       }
     }
@@ -264,6 +259,7 @@ function shoot() {
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
   else if (hit === "body") say("YOU tagged ENEMY", "t");
+  else if (hit === "leg") say("YOU tagged ENEMY in the leg", "t");
   else if (hit === "miss") say("YOU whiffed", "d");
   if ((hit === false || hit === "miss") && was < C.TILT_HALF && P.streak >= C.TILT_HALF) say("you're on TILT", "g");
 }

@@ -62,8 +62,9 @@ export function level(day) {
 //   near        { room: [it and the rooms through its doors] }: where an enemy in that room can see you from
 //   start       { x, y, a }: where you start (the first room's centre) and the way you face (north)
 //   exit        [[x, y]]: the exit door's tiles, shut until the enemies guarding it are down
-//   enemies     [{ x, y, tx, ty, room, guard, fire }]: the notch in a wall an enemy waits in, where it steps out to,
-//               its room, whether it guards the exit, and seconds from stepping out until it first fires
+//   enemies     [{ x, y, tx, ty, room, guard, fire, kind }]: the notch in a wall an enemy waits in, where it steps out to,
+//               its room, whether it guards the exit, seconds from stepping out until it first fires, and its kind
+//               (KINDS, in turn)
 export function corridor(seed, day) {
   const R = rng(seed), L = level(day);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
@@ -135,7 +136,7 @@ export function corridor(seed, day) {
       if (!sp.length) continue;
       const p = sp[Math.floor(R() * sp.length)];
       used.add(p.nx + "," + p.ny); open[p.ny][p.nx] = true;
-      enemies.push({ x: p.nx + 0.5, y: p.ny + 0.5, tx: p.nx + 0.5 - p.ux * 1.35, ty: p.ny + 0.5 - p.uy * 1.35, room: i, guard: n < 2 && i === guard, fire: 2.0 + R() * 0.8 });
+      enemies.push({ x: p.nx + 0.5, y: p.ny + 0.5, tx: p.nx + 0.5 - p.ux * 1.35, ty: p.ny + 0.5 - p.uy * 1.35, room: i, guard: n < 2 && i === guard, fire: 2.0 + R() * 0.8, kind: KINDS[n % KINDS.length] });
       break;
     }
   }
@@ -200,9 +201,12 @@ const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ti
 const FIRE_TICKS = 25;                // then fires every 25 ticks while it can see you
 const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
-export const ENEMY_HP = 3, HEAD_DMG = 2;   // body shots to drop an enemy; a headshot counts 2, so chest then head (a double tap) drops it
+// What a hit takes off an enemy, by the part of it hit (cell()): the chest and gun drop it in 3, a headshot then a chest
+// shot (a double tap) drops it, the crown (onCrown) drops it at once, the legs take half a chest shot, and one hit on a
+// bat's O drops it.
+export const ENEMY_HP = 6, CROWN_DMG = 6, DMG = { "@": 4, "#": 2, "=": 2, "|": 1, "O": 6 };
 export const TILT_SEEN = 1.5, TILT_BLIND = 0.25, TILT_HALF = 3;   // tilt (0 to 5) a miss adds: with an enemy on the view, and without; at least that after a miss on view
-export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ the page draws)
+export const HEAD = 0.22, HEAD_W = 0.2;   // the head: the top 22% of an enemy's rows, its middle 40% of columns (the @ of cell())
 export const MAX_TICKS = 3 * 60 * FPS;    // three minutes: then the run is over, and you didn't get out
 export const MAX_SHOTS = 2000;
 export const MAX_INPUTS = 12000;
@@ -254,18 +258,29 @@ function sees(R, e) {
   return true;
 }
 
-// Where an enemy is on the view: { sxc, ry (how far), l, rr (columns), top, bot (rows), sh }, or null if it can't be seen.
+// The kinds of enemy, dealt in turn: how tall and wide their box is (in tiles) and where it floats (how far its bottom
+// is off the floor, in tiles; 0 stands on it). The shape inside the box is cell()'s.
+//   short   short and fat
+//   tall    tall and skinny
+//   bat     small, hovering at head height, flapping; only its middle O can be hit
+// A ghost teammate (the page's) is drawn as the one size every enemy had before there were kinds.
+export const KINDS = ["short", "tall", "bat"];
+const BUILD = { short: { h: 0.66, w: 0.62, up: 0 }, tall: { h: 0.92, w: 0.4, up: 0 }, bat: { h: 0.24, w: 0.4, up: 0.52 }, ghost: { h: 0.8, w: 0.5, up: 0 } };
+const BAT_ROWS = 4;   // a bat is never less than 4 rows tall, so its O (the middle third) is always a row, on its middle one
+
+// Where an enemy is on the view: { sxc, ry (how far), l, rr (columns), top, bot (rows), sh, kind }, or null if it can't be seen.
 export function enemyBox(eye, e) {
   const { x: px, y: py, dx: fx, dy: fy } = eye, ry = Math.sqrt((e.x - px) * (e.x - px) + (e.y - py) * (e.y - py));
   if (ry < 0.3) return null;
   let da = atan2(e.y - py, e.x - px) - atan2(fy, fx); da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
   if (Math.abs(da) > Math.PI / 2) return null;
-  const sxc = W / 2 + da / COL, sw = 0.5 / ry / COL;
-  let sh = H * 0.8 / ry;
+  const k = BUILD[e.kind], sxc = W / 2 + da / COL, sw = k.w / ry / COL;
+  let sh = H * k.h / ry;
+  if (e.kind === "bat") sh = Math.max(BAT_ROWS, sh);
   if (e.state === "dying") sh *= Math.max(0, 1 - e.dieT / DIE_TICKS);
   if (e.state === "dead" || sh < 1) return null;
-  const bot = Math.round(H / 2 + H / (2 * ry)), top = Math.round(bot - sh);
-  return { sxc, ry, sh, l: Math.round(sxc - sw / 2), rr: Math.round(sxc + sw / 2), top, bot };
+  const bot = Math.round(H / 2 + H * (0.5 - k.up) / ry), top = Math.round(bot - sh);
+  return { sxc, ry, sh, l: Math.round(sxc - sw / 2), rr: Math.round(sxc + sw / 2), top, bot, kind: e.kind };
 }
 
 // Walk: the keys held, at WALK a tick, sliding along walls (x and y are tried apart).
@@ -320,14 +335,49 @@ export function turn(R, d) {
   else R.log.push([R.tick, 1, d]);
 }
 
-// Is (col, row) on an enemy's head? Exactly the @ the page draws: its top HEAD of rows, its middle columns (no spare row
-// above, as the body has), so far away, where the head is a row or two, a headshot is hard.
-export const onHead = (b, c, r) => r >= b.top && r < b.top + HEAD * b.sh && Math.abs((c - b.l) / Math.max(1, b.rr - b.l) - 0.5) < HEAD_W;
+// What an enemy looks like: the character drawn at (col, row) of its box, or "" where it is see-through. The page draws
+// exactly this and a shot is checked against exactly this: it hits only a part in DMG, with no spare cell round it,
+// so the gap between the legs, the space beside the head and a bat's wings miss.
+//   short, tall   "@" the head (its top HEAD of rows, its middle columns), "#" the chest, "=" the gun, "|" the legs.
+//                 short holds its gun on the right, tall on the left, lower down.
+//   bat           "O" its body, in the middle; "/" "\\" "^" its wings, up on even flaps (flap is the page's), down on
+//                 odd ones. The O is the same in both, so a shot never depends on the flap.
+export function cell(b, c, r, flap = 0) {
+  if (c < b.l || c >= b.rr || r < b.top || r >= b.bot) return "";
+  const u = (c - b.l) / Math.max(1, b.rr - b.l), f = (r - b.top) / Math.max(1, b.sh), a = Math.abs(u - 0.5), L = u < 0.5;
+  if (b.kind === "bat") {
+    const up = flap % 2 === 0;
+    if (f < 1 / 3) return up ? (a > 0.3 ? (L ? "/" : "\\") : a < 0.1 ? "^" : "") : "";
+    if (f < 2 / 3) return a < 0.12 ? "O" : up ? (a < 0.3 ? (L ? "/" : "\\") : "") : (L ? "\\" : "/");
+    return up ? "" : a > 0.12 && a < 0.35 ? (L ? "\\" : "/") : "";
+  }
+  if (f < HEAD) return a < HEAD_W ? "@" : "";
+  if (b.kind === "tall") {
+    if (f < 0.55) return a < 0.27 ? "#" : (f > 0.38 && f < 0.5 && L) ? "=" : "";
+    return Math.abs(u - 0.4) < 0.07 || Math.abs(u - 0.6) < 0.07 ? "|" : "";
+  }
+  if (f < 0.6) return a < 0.36 ? "#" : (f > 0.3 && f < 0.42 && !L) ? "=" : "";
+  return Math.abs(u - 0.3) < 0.11 || Math.abs(u - 0.7) < 0.11 ? "|" : "";
+}
+
+// Is (col, row) on an enemy's head? Exactly the drawn @, so far away, where the head is a row or two, a headshot is hard.
+export const onHead = (b, c, r) => cell(b, c, r) === "@";
+
+// Is (col, row) on the crown: the middle 3 @ of the head's top row (all of that row when it is 3 or fewer)? A shot there
+// drops the enemy at once (CROWN_DMG); the rest of the head counts DMG["@"].
+export function onCrown(b, c, r) {
+  if (r !== b.top || !onHead(b, c, r)) return false;
+  let a = c, z = c;
+  while (onHead(b, a - 1, r)) a--;
+  while (onHead(b, z + 1, r)) z++;
+  const m = Math.floor((a + z) / 2);
+  return c >= m - 1 && c <= m + 1;
+}
 
 // A shot at the middle column of the view, on this row, now. Every shot counts, with or without anything to shoot at.
-// Returns false for a shot at nothing, "miss" for a miss with an enemy on the view, "body" or "head" for a hit that
-// leaves the enemy up, "kill" for a body shot that drops it, "headkill" for a headshot that drops it, or null if the run
-// is over. The row is kept to 2 decimals (that is what the log holds); the log gets [tick, 2, row, hit].
+// Returns false for a shot at nothing, "miss" for a miss with an enemy on the view, "leg", "body" or "head" for a hit
+// that leaves the enemy up, "kill" for a leg or body shot that drops it, "headkill" for a headshot that drops it, or null
+// if the run is over. The row is kept to 2 decimals (that is what the log holds); the log gets [tick, 2, row, hit].
 export function fire(R, row) {
   if (R.over) return null;
   row = Math.round(row * 100) / 100;
@@ -336,15 +386,15 @@ export function fire(R, row) {
   const wall = cast(R, eye, Math.max(0, Math.min(W - 1, c))).d;
   const up = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }));
   const hit = up
-    .filter(({ b }) => b && c >= b.l - 1 && c <= b.rr && r >= b.top - 1 && r <= b.bot && wall > b.ry)
+    .filter(({ b }) => b && DMG[cell(b, c, r)] && wall > b.ry)
     .sort((a, b) => a.b.ry - b.b.ry)[0];
   const seen = up.some(({ b }) => b && b.rr >= 0 && b.l < W && wall > b.ry);
   let got = seen ? "miss" : false;
   if (hit) {
-    const head = onHead(hit.b, c, r);
-    hit.e.hp -= head ? HEAD_DMG : 1; R.hits++;
+    const part = cell(hit.b, c, r), head = part === "@";
+    hit.e.hp -= onCrown(hit.b, c, r) ? CROWN_DMG : DMG[part]; R.hits++;
     if (head) R.heads++;
-    got = hit.e.hp > 0 ? (head ? "head" : "body") : head ? "headkill" : "kill";
+    got = hit.e.hp > 0 ? (head ? "head" : part === "|" ? "leg" : "body") : head ? "headkill" : "kill";
     if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }
     // tilt comes down by half on a hit, and all the way on the second hit in a row
     R.calm++; R.streak = R.calm >= 2 ? 0 : Math.floor(Math.min(5, R.streak) / 2);
