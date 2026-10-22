@@ -67,6 +67,7 @@ const eye = () => C.eyeOf(P);
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
+const TALL = 2;   // a wall is twice as high as the floor-to-eye-and-back it was, so there is a ceiling above you
 const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x] = c; cl[y][x] = k; } };
 
 function render() {
@@ -92,23 +93,24 @@ function render() {
     // run of blocks side by side is one stretch, drawn as one wall with no | between its blocks; a door is its own.
     h.line = side + "," + (side === 0 ? mx + (sx < 0 ? 1 : 0) : my + (sy < 0 ? 1 : 0)) + "," + (h.door ? "x" : h.locked ? "l" : "");
     h.at = side === 0 ? py + d * h.rdy : px + d * h.rdx;
-    // its top, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you narrows away
-    h.t = H / 2 - H / Math.max(0.3, d) / 2;
+    // its top and bottom, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you
+    // narrows away. A wall is TALL times as high as you see from the floor up to your eye and back down, standing on the
+    // same floor as the enemies (corridor.js enemyBox), so it rises above you to the ceiling.
+    h.t = H / 2 - (TALL - 0.5) * H / Math.max(0.3, d); h.b = H / 2 + 0.5 * H / Math.max(0.3, d);
     hits.push(h);
   }
   // are columns x and x + 1 on the same stretch of wall?
   const joined = (x) => x >= 0 && x + 1 < W && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
   for (let x = 0; x < W; x++) {
-    const { d, side, door, locked, rdx, rdy, pd, t } = hits[x], top = Math.round(t), bot = Math.round(H - t);
+    const { d, side, door, locked, rdx, rdy, pd, t, b } = hits[x], top = Math.round(t), bot = Math.round(b);
     const k = door ? "g" : pd > 14 ? "d" : pd > 7 ? "t" : "";
     // where the top edge crosses into this column and out of it: halfway to the columns either side on the same stretch
     const tl = joined(x - 1) ? (hits[x - 1].t + t) / 2 : t, tr = joined(x) ? (hits[x + 1].t + t) / 2 : t;
+    const bl = joined(x - 1) ? (hits[x - 1].b + b) / 2 : b, br = joined(x) ? (hits[x + 1].b + b) / 2 : b;
     const sideOn = (side === 0 ? Math.abs(rdx) : Math.abs(rdy)) <= 0.8;   // a side wall, running away from you
     // a corner between this column and the one to its left: the | goes on the nearer of the two, all the way up it
     const corner = x > 0 && !joined(x - 1), edge = corner && hits[x - 1].d < d ? x - 1 : x;
-    if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(H - e.t)); y++) put(edge, y, "|", e.door ? "g" : e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
-    // the edge is drawn only in the rows it steps through, so a shallow slope is a few steps and a flat one nothing
-    const y0 = Math.round(Math.min(tl, tr)), y1 = Math.round(Math.max(tl, tr)), c = tr > tl ? "\\" : "/";
+    if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(e.b)); y++) put(edge, y, "|", e.door ? "g" : e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
       if (ch[y][x] === "|") continue;   // a corner drawn from the column to the right
       // the exit, while it's shut: a gold door; a locked door: # all over, as the minimap marks it
@@ -119,13 +121,21 @@ function render() {
     // a side wall's edge is one unbroken line: a column it crosses no row in still gets its \ or /, on the row it runs
     // along, unless it slopes under 1 row in 4 columns (that would be a flat run of them); a wall facing you keeps its
     // flat edge undrawn
-    const mid = Math.floor((tl + tr) / 2), [ya, yb] = y1 > y0 ? [y0, y1] : sideOn && Math.abs(tr - tl) >= 0.25 ? [mid, mid + 1] : [0, 0];
-    for (let y = ya; y < yb; y++) {
-      put(x, y, c, k); put(x, H - 1 - y, c === "/" ? "\\" : "/", k);
+    // (the top edge, then the bottom one; each is a \ where it falls to the right and a / where it rises)
+    for (const [l, r] of [[tl, tr], [bl, br]]) {
+      const y0 = Math.round(Math.min(l, r)), y1 = Math.round(Math.max(l, r)), c = r > l ? "\\" : "/", mid = Math.floor((l + r) / 2);
+      const [ya, yb] = y1 > y0 ? [y0, y1] : sideOn && Math.abs(r - l) >= 0.25 ? [mid, mid + 1] : [0, 0];
+      for (let y = ya; y < yb; y++) put(x, y, c, k);
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
       const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
+      const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
+      if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
+    }
+    // the ceiling: the same lines, overhead, where the walls' tops meet it
+    for (let y = Math.min(top, H / 2 - 1) - 1; y >= 0; y--) {
+      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
