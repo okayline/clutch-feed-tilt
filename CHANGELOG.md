@@ -4,6 +4,14 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.12.2 — "Side Walls"
+**Wed Oct 21, 2026 · 3:25 PM HST**
+
+- A wall in the 3D view is drawn as one stretch from corner to corner: the blocks side by side along one wall share one \ and / edge, and an upright | stands only at a real corner (where one stretch meets another, or ends in front of one further away), on the nearer of the two and all the way up it. Side walls now read as walls running away from you, as 4Dungeon's do. A side wall's top and bottom edges are unbroken \ and / lines. A wall facing you has an upright | at the edge of every block in it, so a solid wall reads as one. Removed: the | between every block of a side wall, which made side walls a fence of bars; the gaps in a side wall's sloping edges; and the field of dots on a wall facing you.
+- The gun is solid: the gaps inside it hide the wall or door behind it, so a # door no longer shows through it. Removed: the see-through gaps in the gun.
+
+---
+
 ## v0.12.1 — "Outlines"
 **Wed Oct 21, 2026 · 2:55 PM HST**
 
