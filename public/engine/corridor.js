@@ -48,16 +48,19 @@ export function level(day) {
 // The day's map. 4Dungeon's wing generator (engine/floor.js) builds that quarter's floor from its shared seed, and at
 // every offer of two locked doors the day's seed opens one, so the whole floor is one a 4Dungeon player could walk.
 // The run is on RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): you start in the
-// first room of the first of them, and the exit is the door into the room behind its last offer (the stairs, on the
-// floor's last wing). Only those wings' rooms are built. Locked doors that weren't opened stay wall.
+// first room of the first of them, facing north (up on the minimap), and the exit is the door into the room behind its
+// last offer (the stairs, on the floor's last wing). Every room of the floor is built, so the 3D view has a door
+// wherever the minimap (4Dungeon's) shows one; the enemies are only in the run's wings. A locked door that wasn't opened
+// is wall, drawn as a locked door.
 //   floor       the wing generator's floor (for the minimap)
 //   level       level(day)
 //   route       the room numbers of the shortest way from the first room to the goal, through open doors
 //   goal        the room behind the exit; walking into it ends the run
 //   open[y][x]  true where you can walk and see through; w x h tiles
+//   locked      { "x,y": 1 } for the tiles of locked doors (wall, drawn as a door)
 //   blocks      [by][bx]: the room each 7 x 7 block of the tile map is (-1 for none)
 //   near        { room: [it and the rooms through its doors] }: where an enemy in that room can see you from
-//   start       { x, y, a }: where you start (the first room's centre) and the way you face (toward the next room)
+//   start       { x, y, a }: where you start (the first room's centre) and the way you face (north)
 //   exit        [[x, y]]: the exit door's tiles, shut until the enemies guarding it are down
 //   enemies     [{ x, y, tx, ty, room, guard, fire }]: the notch in a wall an enemy waits in, where it steps out to,
 //               its room, whether it guards the exit, and seconds from stepping out until it first fires
@@ -80,8 +83,8 @@ export function corridor(seed, day) {
   const route = [];
   for (let i = goal; i !== -1; i = prev[i]) route.unshift(i);
 
-  // the tile map: every shown room, with a room's width of wall all round
-  const built = [...shown];
+  // the tile map: every room of the floor, with a room's width of wall all round
+  const built = rooms.map((r, i) => r ? i : -1).filter((i) => i >= 0);
   const r0 = Math.min(...built.map((i) => rooms[i].r)) - 1, c0 = Math.min(...built.map((i) => rooms[i].c)) - 1;
   const w = (Math.max(...built.map((i) => rooms[i].c)) - c0 + 2) * S, h = (Math.max(...built.map((i) => rooms[i].r)) - r0 + 2) * S;
   const open = Array.from({ length: h }, () => new Array(w).fill(false));
@@ -93,34 +96,33 @@ export function corridor(seed, day) {
     for (let k = -1; k <= 1; k++) out.push([x + (ux ? (ux > 0 ? S - 1 : 0) : mid + k), y + (uy ? (uy > 0 ? S - 1 : 0) : mid + k)]);
     return out;
   };
-  const near = {};
+  const near = {}, locked = {};
   for (const i of built) {
     const { x, y } = corner(i);
     blocks[y / S][x / S] = i;
     for (let dy = 1; dy < S - 1; dy++) for (let dx = 1; dx < S - 1; dx++) open[y + dy][x + dx] = true;
     near[i] = [i];
     for (const [d, j] of Object.entries(rooms[i].doors)) {
-      if (!shown.has(j)) continue;   // a locked door nobody opened, or a room not in today's wings: wall
+      if (!rooms[j]) { for (const [tx, ty] of doorTiles(i, d)) locked[tx + "," + ty] = 1; continue; }   // a locked door nobody opened
       for (const [tx, ty] of doorTiles(i, d)) open[ty][tx] = true;
       near[i].push(j);
     }
   }
   const last = route.length - 1, guard = route[last - 1], c = (i) => ({ x: corner(i).x + S / 2, y: corner(i).y + S / 2 });
   const exit = doorTiles(guard, Object.keys(rooms[guard].doors).find((d) => rooms[guard].doors[d] === goal));
-  const s0 = c(route[0]), s1 = c(route[1]);
-  const start = { x: s0.x, y: s0.y, a: s1.x > s0.x ? 0 : s1.y > s0.y ? TURN / 4 : s1.x < s0.x ? TURN / 2 : 3 * TURN / 4 };
+  const s0 = c(route[0]), start = { x: s0.x, y: s0.y, a: 3 * TURN / 4 };
 
   // Enemies wait in a notch in a room's wall (a wall with no door) and step out into the room when they see you. Two
-  // guard the exit, in the room before it; the other three are dealt to the other rooms (not the first or the goal).
+  // guard the exit, in the room before it; the other three are dealt to the run's other rooms (not the first or the goal).
   const spots = (i) => {
     const { x, y } = corner(i), out = [];
     for (const [d, [ux, uy]] of Object.entries(DIRS)) {
-      if (shown.has(rooms[i].doors[d])) continue;
+      if (rooms[i].doors[d] !== undefined) continue;
       for (const k of [0, -2, 2]) out.push({ nx: x + (ux ? (ux > 0 ? S - 1 : 0) : mid + k), ny: y + (uy ? (uy > 0 ? S - 1 : 0) : mid + k), ux, uy });
     }
     return out;
   };
-  const others = built.filter((i) => i !== route[0] && i !== goal && i !== guard);
+  const others = [...shown].filter((i) => i !== route[0] && i !== goal && i !== guard);
   for (let i = others.length - 1; i > 0; i--) { const j = Math.floor(R() * (i + 1)); [others[i], others[j]] = [others[j], others[i]]; }
   const homes = [guard, guard];
   for (let n = 0; homes.length < ENEMIES; n++) homes.push(others.length ? others[n % others.length] : guard);
@@ -137,7 +139,7 @@ export function corridor(seed, day) {
       break;
     }
   }
-  return { floor, level: L, route, goal, open, w, h, blocks, near, start, exit, enemies };
+  return { floor, level: L, route, goal, open, locked, w, h, blocks, near, start, exit, enemies };
 }
 
 // The room tile (x, y) is in, or -1.
@@ -227,7 +229,7 @@ const tri = (n, p) => Math.abs(((n % p) / p) * 4 - 2) - 1;
 export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (Math.min(5, R.streak) - 1) * 0.35 : 0;
 
 // Column x of the view, cast from the eye to the first wall: { d: how far, side, mx, my (the wall block), door (it's
-// the shut exit), sx, sy, rdx, rdy }.
+// the shut exit), locked (a locked door), sx, sy, rdx, rdy }.
 export function cast(R, eye, x) {
   const { x: px, y: py, dx: fx, dy: fy } = eye, th = atan2(fy, fx) + (x + 0.5 - W / 2) * COL, [rdy, rdx] = sincos(th);
   let mx = Math.floor(px), my = Math.floor(py);
@@ -238,7 +240,7 @@ export function cast(R, eye, x) {
     if (sdx < sdy) { sdx += ddx; mx += sx; side = 0; } else { sdy += ddy; my += sy; side = 1; }
     if (blocked(R, mx, my)) break;
   }
-  return { d: side === 0 ? sdx - ddx : sdy - ddy, side, mx, my, door: shutAt(R, mx, my), sx, sy, rdx, rdy };
+  return { d: side === 0 ? sdx - ddx : sdy - ddy, side, mx, my, door: shutAt(R, mx, my), locked: !!R.cor.locked[mx + "," + my], sx, sy, rdx, rdy };
 }
 
 // Can an enemy at (x, y) see you? Only from your room or one next to it (so a tick checks a few enemies, not all),

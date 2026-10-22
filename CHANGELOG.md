@@ -7,7 +7,8 @@ Newest first. Times are Hawaii time (HST).
 ## v0.11 — "Free Roam"
 **Wed Oct 21, 2026 · 2:30 PM HST**
 
-- You walk anywhere on the day's two wings: W A S D to walk and strafe, and walls stop you. Removed: the rails, and the stops and turns on the spot along them.
+- You walk anywhere on the floor: W A S D to walk and strafe, and walls stop you. You start facing north (up on the minimap). Removed: the rails, and the stops and turns on the spot along them.
+- The whole 4Dungeon floor is built, so there's a door in the 3D view wherever the minimap shows one, and a locked door (# on the minimap) is a # door you can't open. The enemies and the exit stay in the day's two wings. Removed: walls in the 3D view where the minimap shows a door to another wing.
 - Click the 3D view to take the mouse; moving it left and right turns you, up and down moves the crosshair. The crosshair stays in the middle and a click shoots there. Esc lets the mouse go. Removed: aiming by moving the crosshair over the view.
 - On a phone: put a thumb down on the left half of the view and drag to walk; drag on the right half to turn and aim, and tap there to shoot. Removed: tapping where you want to shoot.
 - 5 enemies, all yours to shoot, wait in notches in the walls of the rooms. One steps out when it can see you, and it only shoots while it can. Removed: 3 enemies that woke by how far along the rails you were and hit you through walls, and your squad taking 2 of 5.

@@ -16,7 +16,7 @@ test("the 4Dungeon level of a day: the moon quarter at 00:00 UTC, one wing a day
 
 const MAPS = [[1, "2026-10-21"], [2, "2026-10-14"], [3, "2026-10-19"], [12345, "2026-10-24"], [3359765128, "2026-10-28"]];
 
-test("a map: the same seed gives the same map; you start in the first room facing the next; 5 enemies in notches, 2 guarding the exit", () => {
+test("a map: the same seed gives the same map; you start in the first room facing north; every door of the floor is built; 5 enemies in notches, 2 guarding the exit, the only way to the goal", () => {
   const day = "2026-10-21";
   assert.deepEqual(C.corridor(12345, day), C.corridor(12345, day));
   assert.notDeepEqual(C.corridor(1, day).open, C.corridor(2, day).open, "another seed, other doors");
@@ -26,9 +26,25 @@ test("a map: the same seed gives the same map; you start in the first room facin
     assert.equal(c.goal, c.route[c.route.length - 1]);
     assert.equal(C.roomOf(c, c.start.x, c.start.y), c.route[0], "you start in the first room");
     assert.ok(c.open[Math.floor(c.start.y)][Math.floor(c.start.x)]);
-    // facing the next room: a quarter turn is TURN / 4, so the next room is 7 tiles that way
-    const [dy, dx] = C.sincos(c.start.a * 2 * Math.PI / C.TURN), nx = c.start.x + Math.round(dx) * S, ny = c.start.y + Math.round(dy) * S;
-    assert.equal(C.roomOf(c, nx, ny), c.route[1]);
+    assert.equal(c.start.a, 3 * C.TURN / 4, "north: three quarters of the way round from east, y grows south");
+    // every room of the floor is built, with an open gap at every door the minimap draws open, and a locked door's
+    // 3 tiles marked where it has none
+    const f = c.floor, mid = (S - 1) / 2;
+    for (const [i, room] of f.rooms.entries()) {
+      if (!room) continue;
+      assert.ok(Object.values(c.blocks).some((row) => row.includes(i)), `room ${i} is built`);
+      for (const [dir, j] of Object.entries(room.doors)) {
+        const [ux, uy] = { N: [0, -1], E: [1, 0], S: [0, 1], W: [-1, 0] }[dir];
+        const bx = c.blocks.findIndex((row) => row.includes(i)), by = bx, cx = c.blocks[by] ? c.blocks[by].indexOf(i) : -1;
+        const x = cx * S + mid + ux * mid, y = by * S + mid + uy * mid;   // the middle tile of the door, on this room's edge
+        if (f.rooms[j]) assert.ok(c.open[y][x], `seed ${seed}: room ${i}'s ${dir} door is open`);
+        else assert.ok(!c.open[y][x] && c.locked[x + "," + y], `seed ${seed}: room ${i}'s ${dir} door is locked`);
+      }
+    }
+    // with the exit shut, the goal can't be reached from the start any other way
+    const R = C.newRun(c), seen = new Set([Math.floor(c.start.x) + "," + Math.floor(c.start.y)]), q = [[Math.floor(c.start.x), Math.floor(c.start.y)]];
+    while (q.length) { const [x, y] = q.pop(); for (const [dx2, dy2] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (x + dx2) + "," + (y + dy2); if (!seen.has(k) && !C.blocked(R, x + dx2, y + dy2)) { seen.add(k); q.push([x + dx2, y + dy2]); } } }
+    assert.ok(![...seen].some((k) => C.roomOf(c, ...k.split(",").map(Number)) === c.goal), `seed ${seed}: the exit is the only way in`);
     // the exit: 3 tiles on the edge of the room before the goal, open on the map (a run shuts it)
     assert.equal(c.exit.length, 3);
     for (const [x, y] of c.exit) { assert.ok(c.open[y][x]); assert.equal(C.roomOf(c, x, y), c.route[c.route.length - 2]); }
@@ -52,7 +68,10 @@ test("walking: W walks the way you face at 3 tiles a second; walls stop you; tur
   C.turn(R, C.TURN / 4); C.turn(R, C.TURN / 4); C.turn(R, -C.TURN / 4);
   assert.equal(R.a, (a + C.TURN / 4) % C.TURN);
   assert.deepEqual(R.log, [[0, 0, 1], [1, 1, C.TURN / 4]], "keys logged when they change; turns in one tick logged as one");
-  // walk at the wall to your right for 3 seconds: you end up against it, never in it
+  // turn to a side of the first room with no door (E S W N are 0, 1, 2, 3 quarter turns) and walk at it for 3 seconds:
+  // you end up against the wall, never in it
+  const doors = c.floor.rooms[c.route[0]].doors, side = ["E", "S", "W", "N"].findIndex((d) => doors[d] === undefined);
+  C.turn(R, ((side * C.TURN / 4 - R.a) % C.TURN + C.TURN) % C.TURN || C.TURN);
   for (let i = 0; i < 45; i++) C.tick(R);
   assert.ok(C.isOpen(c, Math.floor(R.x), Math.floor(R.y)));
   const before = [R.x, R.y]; C.tick(R);

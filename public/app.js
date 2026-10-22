@@ -72,7 +72,7 @@ function render() {
   let prev = "";
   for (let x = 0; x < W; x++) {
     // the same ray the engine uses to tell whether a shot hits a wall first (corridor.js cast)
-    const { d, side, mx, my, door, sx, sy, rdx, rdy } = C.cast(P, E, x);
+    const { d, side, mx, my, door, locked, sx, sy, rdx, rdy } = C.cast(P, E, x);
     zbuf[x] = d;
     // a panel is one face of one wall block: drawn flat, as tall as its middle is near, one character all over, with a
     // line down its left edge. Only where you stand changes it, never which way you face.
@@ -84,6 +84,8 @@ function render() {
     for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
       // the exit, while it's shut: a gold door
       if (door) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "=", "g");
+      // a locked door: # all over, as the minimap marks it
+      else if (locked) put(x, y, seam ? "|" : y === top || y === bot - 1 ? "_" : "#", pd > 14 ? "d" : "t");
       else put(x, y, seam ? "|" : (y === top || y === bot - 1) && pd < 12 ? "_" : RAMP[r], pd > 14 ? "d" : pd > 7 ? "t" : "");
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
