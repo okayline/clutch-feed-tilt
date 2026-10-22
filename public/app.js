@@ -32,6 +32,8 @@ const GUN = [
   "    |########|    ",
 ];
 
+const reloadFrame = () => !P || !(P.reload > 0) ? 0 : P.reload > C.RELOAD_TICKS / 2 ? 1 : 2;
+
 let day = "", SEED = 0, WING = 0, myName = null, GHOSTS = [];
 let cor, enemies, squad, feed, P, lag = 0;
 
@@ -39,7 +41,7 @@ let cor, enemies, squad, feed, P, lag = 0;
 function build() {
   cor = C.corridor(SEED, day, WING);
   // the fight itself (where you are, HP, shots, enemies) is the engine's run (corridor.js newRun); the rest is the page's
-  P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
+  P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, gibs: [], hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
   enemies = P.enemies; lag = 0; turnLeft = 0;
   // Ghost teammates: other players' sealed runs today (/api/today ghosts), played again here (corridor.js replay) to
   // get where they were on every tick. They walk beside you; what they did is told in the kill feed as it happens.
@@ -173,6 +175,7 @@ function render() {
     }
     if (e.state === "out" && e.fire < 0.7 * C.FPS && Math.floor(P.tick / C.FPS * 8) % 2 === 0) put(Math.round(sxc), top - 1, "!", "g");
   }
+  for (const g of P.gibs) put(Math.round(g.x), Math.round(g.y), g.c, g.t > GIB_LIFE / 3 ? "e" : "d");
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
   if (!P.done) {
@@ -182,8 +185,11 @@ function render() {
   // the gun: one rigid piece at the bottom middle, swaying out the way you turn along a small arc (one row lower once it
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0);
-  GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean), gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][reloadFrame()];
+  // reloading: two frames. First the gun drops 4 rows with the magazine out (the grip empty), then it comes back up 2 rows,
+  // magazine in, until the reload is done.
+  const magOut = reloadFrame() === 1;
+  GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
   let out = "";
   for (let y = 0; y < H; y++) {
@@ -308,11 +314,24 @@ function showBanner(lines, secs) {
 
 // ---- play ---------------------------------------------------------------------------------------------------
 // A shot, at this tick (corridor.js fire: it decides the hit and logs [tick, 2, row, hit]).
+// Gibs: little chunks of data flying off where a shot hits (at the crosshair), falling and gone in under half a second.
+// Drawing only: nothing in the engine.
+const GIB_GLYPHS = "01#%&*", GIB_LIFE = 0.45;
+function gib(n) {
+  if (reduced) return;
+  const x = C.AIM + P.jit, y = P.aimY;
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 2 * Math.PI, sp = 10 + Math.random() * 18;
+    P.gibs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp * 0.45 - 6, t: GIB_LIFE * (0.6 + Math.random() * 0.4), c: GIB_GLYPHS[Math.floor(Math.random() * GIB_GLYPHS.length)] });
+  }
+}
+
 function shoot() {
   if (P.done || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
   const hit = C.fire(P, P.aimY);
+  if (hit && hit !== "miss" && hit !== "dry") gib(hit === "headkill" || hit === "kill" ? 12 : 6);
   if (hit === "headkill") { P.left--; say("HEADSHOT!! YOU fragged ENEMY", "b"); }
   else if (hit === "kill") { P.left--; say("YOU fragged ENEMY", "b"); }
   else if (hit === "head") say("YOU nailed ENEMY in the head", "t");
@@ -378,7 +397,10 @@ function showSealed(run) {
 
 // One frame: the page's own easing and timers, then as many of the engine's fixed ticks as the time that passed holds.
 function step(dt) {
-  P.sway -= P.sway * Math.min(1, dt * 8); P.flash = Math.max(0, P.flash - dt); P.hurt = Math.max(0, P.hurt - dt);
+  P.sway -= P.sway * Math.min(1, dt * 8); P.flash = Math.max(0, P.flash - dt);
+  P.gibs = P.gibs.filter((g) => (g.t -= dt) > 0);
+  for (const g of P.gibs) { g.x += g.vx * dt; g.y += g.vy * dt; g.vy += 40 * dt; }
+  P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
   if (P.done) return;
