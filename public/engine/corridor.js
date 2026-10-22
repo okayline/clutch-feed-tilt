@@ -267,6 +267,18 @@ export const eyeOf = (R) => { const [dy, dx] = dirOf(R.a); return { x: R.x, y: R
 const tri = (n, p) => Math.abs(((n % p) / p) * 4 - 2) - 1;
 export const jit = (R) => R.streak >= 2 ? (tri(R.tick, 4) + tri(R.tick, 5)) * (Math.min(5, R.streak) - 1) * 0.35 : 0;
 
+// A shot at range goes a little wide, and nothing on the screen moves to show it: an enemy on the view further than
+// NEAR tiles adds SPREAD columns (and a little under half as many rows, a row being taller) for every tile past NEAR
+// (up to FAR_MAX of them), swinging with the tick, so a far shot has to be timed. Returns [columns, rows].
+export const NEAR = 5, SPREAD = 0.2, FAR_MAX = 10;
+export function scatter(R) {
+  const eye = eyeOf(R);
+  let near = Infinity;
+  for (const e of R.enemies) if (e.state === "out" || e.state === "stepping") { const b = enemyBox(eye, e); if (b && cast(R, eye, Math.max(0, Math.min(W - 1, Math.round(b.sxc)))).d > b.ry) near = Math.min(near, b.ry); }
+  const far = Math.min(FAR_MAX, near - NEAR);
+  return far > 0 ? [(tri(R.tick, 6) + tri(R.tick, 7)) * far * SPREAD, (tri(R.tick, 5) + tri(R.tick, 8)) * far * SPREAD * 0.4] : [0, 0];
+}
+
 // Column x of the view, cast from the eye to the first wall: { d: how far, side, mx, my (the wall block), door (it's
 // the shut exit), locked (a locked door), sx, sy, rdx, rdy }.
 export function cast(R, eye, x) {
@@ -418,7 +430,7 @@ export function fire(R, row) {
   if (R.over) return null;
   row = Math.round(row * 100) / 100;
   R.shots++;
-  const c = Math.round(AIM + jit(R)), r = Math.round(row), eye = eyeOf(R);
+  const [sx, sy] = scatter(R), c = Math.round(AIM + jit(R) + sx), r = Math.round(row + sy), eye = eyeOf(R);
   const wall = cast(R, eye, Math.max(0, Math.min(W - 1, c))).d;
   const up = R.enemies.filter((e) => e.state === "out" || e.state === "stepping").map((e) => ({ e, b: enemyBox(eye, e) }));
   const hit = up
@@ -428,7 +440,7 @@ export function fire(R, row) {
   let got = seen ? "miss" : false;
   if (hit) {
     const part = cell(hit.b, c, r), head = part === "@";
-    hit.e.hp -= onCrown(hit.b, c, r) && Math.abs(row - r) <= CROWN_ROW ? CROWN_DMG : DMG[part]; R.hits++;
+    hit.e.hp -= onCrown(hit.b, c, r) && Math.abs(row + sy - r) <= CROWN_ROW ? CROWN_DMG : DMG[part]; R.hits++;
     if (head) R.heads++;
     got = hit.e.hp > 0 ? (head ? "head" : part === "|" ? "leg" : "body") : head ? "headkill" : "kill";
     if (hit.e.hp <= 0) { hit.e.state = "dying"; hit.e.dieT = 0; R.kills++; }

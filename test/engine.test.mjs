@@ -225,3 +225,18 @@ test("replay: inputs that aren't a run are refused", () => {
   assert.equal(C.replay(cor, [[5.5, 0, 1]]), null, "a tick is a whole number");
   assert.equal(C.replay(cor, "nope"), null);
 });
+
+test("a far shot goes wide, and the crosshair doesn't move: an enemy on the view further than NEAR tiles, wider the further it is", () => {
+  const cor = C.corridor(12345, "2026-10-21", 2), [R, e] = faceFirst(cor);
+  for (const row of cor.open) row.fill(true);   // an open field, so the enemy can be seen from any distance up to its edge
+  const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ux, uy]) => ({ ux, uy, room: Math.min(...[ux > 0 ? e.x : ux < 0 ? cor.w - e.x : Infinity, uy > 0 ? e.y : uy < 0 ? cor.h - e.y : Infinity]) })).sort((a, b) => b.room - a.room)[0];
+  assert.ok(dir.room > C.NEAR + 4, "room for an enemy 4 tiles past NEAR");
+  e.state = "out";
+  R.a = Math.round(C.atan2(dir.uy, dir.ux) * C.TURN / (2 * Math.PI) + C.TURN) % C.TURN;   // facing along dir, with the enemy ahead
+  const at = (d) => { R.x = e.x - dir.ux * d; R.y = e.y - dir.uy * d; return Array.from({ length: 42 }, (_, t) => { R.tick = t; return C.scatter(R); }); };
+  assert.deepEqual(at(C.NEAR), Array(42).fill([0, 0]), "up to NEAR: no scatter");
+  const wide = (d) => Math.max(...at(d).map(([x]) => Math.abs(x)));
+  assert.ok(wide(C.NEAR + 4) > 0 && wide(C.NEAR + 4) <= 2 * 4 * C.SPREAD + 1e-9, "past NEAR: at most two zig-zags of (distance - NEAR) * SPREAD");
+  assert.ok(wide(C.NEAR + 4) > wide(C.NEAR + 2), "further, wider");
+  assert.equal(C.jit(R), 0, "the crosshair itself doesn't move (no tilt)");
+});
