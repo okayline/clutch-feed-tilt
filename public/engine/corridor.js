@@ -233,7 +233,7 @@ export const WALK = 3 / FPS;          // tiles a tick, walking or strafing
 const RAD = 0.22;                     // how close you get to a wall
 const SEE = 8;                        // the furthest an enemy sees you from, in tiles
 const STEP_TICKS = 7;                 // an enemy steps out of its notch in 7 ticks
-const FIRE_TICKS = 25;                // then fires every 25 ticks while it can see you
+export const FIRE_TICKS = 25, DRONE_FIRE_TICKS = 50;   // then fires every 25 ticks while it can see you (a drone, every 50)
 const REACT_TICKS = 6;                // and once it loses sight of you, it waits at least 6 ticks after it sees you again
 const DIE_TICKS = 8;
 // What a hit takes off an enemy (10 HP), by the part of it hit (cell()): the chest and gun drop it in 5, the head in 3,
@@ -309,7 +309,7 @@ function sees(R, e) {
 // is off the floor, in tiles; 0 stands on it). The shape inside the box is cell()'s.
 //   short   short and fat
 //   tall    tall and skinny
-//   drone   small, hovering at head height, rotors spinning; only its middle O can be hit
+//   drone   small, hovering at head height, rotors spinning; only its middle O can be hit; it fires half as often
 // A ghost teammate (the page's) is drawn as the one size every enemy had before there were kinds.
 export const KINDS = ["short", "tall", "drone"];
 const BUILD = { short: { h: 0.66, w: 0.62, up: 0 }, tall: { h: 0.92, w: 0.4, up: 0 }, drone: { h: 0.24, w: 0.4, up: 0.52 }, ghost: { h: 0.8, w: 0.5, up: 0 } };
@@ -356,7 +356,7 @@ export function tick(R) {
     else if (e.state === "out") {
       if (!sees(R, e)) e.fire = Math.max(e.fire, REACT_TICKS);
       else if (--e.fire <= 0) {
-        e.fire = FIRE_TICKS; R.hp--; ev.push("hurt");
+        e.fire = e.kind === "drone" ? DRONE_FIRE_TICKS : FIRE_TICKS; R.hp--; ev.push("hurt");
         if (R.hp <= 0) { R.hp = 0; R.over = true; return ev; }
       }
     } else if (e.state === "dying") { if (++e.dieT >= DIE_TICKS) e.state = "dead"; }

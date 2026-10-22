@@ -240,3 +240,15 @@ test("a far shot goes wide, and the crosshair doesn't move: an enemy on the view
   assert.ok(wide(C.NEAR + 4) > wide(C.NEAR + 2), "further, wider");
   assert.equal(C.jit(R), 0, "the crosshair itself doesn't move (no tilt)");
 });
+
+test("a drone fires half as often as the others: every 50 ticks against 25, once it sees you", () => {
+  const hits = (kind) => {
+    const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = kind);
+    const [R, e] = faceFirst(cor), at = [];
+    R.hp = 99; e.fire = 1;   // about to fire
+    for (let n = 0; n < 130; n++) { const before = R.hp; C.tick(R); if (R.hp < before) at.push(R.tick); }
+    return at.slice(1).map((t, i) => t - at[i]).slice(0, 2);
+  };
+  assert.deepEqual(hits("short"), [25, 25]);
+  assert.deepEqual(hits("drone"), [50, 50]);
+});
