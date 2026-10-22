@@ -4,6 +4,18 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.13.0 — "Two Wings"
+**Wed Oct 21, 2026 · 3:50 PM HST**
+
+- The run is only the day's two wings: those rooms are built and every door out of them into another wing's room is wall, in the 3D view and on the minimap. Today that's 7 rooms instead of 18. Removed: every wing 4Dungeon's players have opened being built and walkable, which made the run a long maze.
+- The three enemies that don't guard the exit wait in the rooms on the way to it, one a room, then in the run's other rooms if the way is short. Removed: them being dealt to any room of the two wings, off the way as often as on it.
+- You start facing the next room on the way. Removed: always starting facing north, which can now be a wall.
+- You see about 9 tiles, a room and into the next; past that is dark, walls, floor, ceiling and enemies alike. The end of the run stays out of sight until you're near it. Removed: seeing down a straight run all the way to the exit from the start.
+- The shut exit is a holo gate in the middle of its 3 tiles: a bright | post each side and a field of : ' . falling between them, in a plain wall. Removed: the exit's gold # on all 3 tiles, and gold on any wall.
+- These change the rules (corridor.js: the rooms built, where enemies wait, the way you start facing), so a run sealed today before this replays differently as a ghost.
+
+---
+
 ## v0.12.3 — "High Ceilings"
 **Wed Oct 21, 2026 · 3:38 PM HST**
 
