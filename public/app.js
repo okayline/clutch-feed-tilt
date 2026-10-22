@@ -70,7 +70,7 @@ const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t
 // nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
 // close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
 // underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
-const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2;   // then FRAGGED holds, and fades out like GTA's WASTED   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
 const dying = () => P && P.deathT !== undefined;
 const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
 // The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
@@ -267,7 +267,7 @@ function render() {
 
   if (dying()) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";   // red while you fall
   if (wipe && drawWipe()) wipe.done = true;
-  else if (dying() && P.fragT !== undefined) for (let y = 0; y < H; y++) { ch[y] = FRAGGED.ch[y].slice(); cl[y] = FRAGGED.cl[y].slice(); }
+  else if (dying() && P.fragT !== undefined) for (let y = 0; y < H; y++) { ch[y] = P.black ? new Array(W).fill(" ") : FRAGGED.ch[y].slice(); cl[y] = P.black ? new Array(W).fill("") : FRAGGED.cl[y].slice(); }
   let out = "";
   for (let y = 0; y < H; y++) {
     let run = "", k = cl[y][0];
@@ -497,7 +497,11 @@ function step(dt) {
     if (P.fragT !== undefined) {
       P.fragT += dt;
       $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
-      if (P.fragT >= FRAG_HOLD + FRAG_FADE) { finish(); $("screen").style.opacity = ""; const bn = $("banner"); bn.classList.remove("fadein"); void bn.offsetWidth; bn.classList.add("fadein"); }   // the FEED banner fades in
+      if (P.fragT >= FRAG_HOLD + FRAG_FADE + FRAG_BLACK) {   // the view stays black (render) and the FEED banner fades in over it
+        P.black = true; $("screen").style.opacity = "";
+        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => bn.classList.remove("fadein"), { once: true });
+        finish();
+      }
     }
     return;
   }
