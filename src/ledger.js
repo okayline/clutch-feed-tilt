@@ -4,8 +4,9 @@
 //   record = JSON of the run: the day, the player's id, HP left, shots, hits, the label and the shot log
 //   hash   = SHA-256( prev_hash + "|" + record )
 //
-// A day's entry is sealed by the first request that needs the day (dayEntry); its record is the day and the 4Dungeon
-// level its wings come from, and the first 4 bytes of its hash are the day's seed, which opens the floor's doors.
+// A day's entry is sealed by the first request that needs the day (dayEntry); its record is the day, the 4Dungeon
+// level its wings come from and how far that floor is open, and the first 4 bytes of its hash are the day's seed, which
+// picks the floor's doors.
 // So the day's map can't be known before the day starts, and it is fixed on the chain for good.
 //
 // The first entry chains from GENESIS. Changing any old record breaks its hash and every hash after it.
@@ -37,19 +38,21 @@ export async function chainInsert(db, prev, { day, playerId, record, t }) {
     .bind(day, record, prev, hash, t, playerId);
 }
 
-// The day's entry: its hash, sealing it first if it isn't on the chain yet. `day` is "YYYY-MM-DD", `level` is
-// corridor.js level(day). Two requests at once can't both seal one: a day has one entry (ledger_one_day) and the chain
-// can't fork (prev_hash UNIQUE), so the loser reads the winner's.
-export async function dayEntry(db, day, level, t) {
-  const record = JSON.stringify({ day, level: level.name, floor: level.seed, wing: level.wing + 1 });
+// The day's entry: { hash, wing }, sealing it first if it isn't on the chain yet. `day` is "YYYY-MM-DD", `level` is
+// corridor.js level(day), and `wingOf()` gives how far the floor is open (1 to WINGS), asked only when sealing. Two
+// requests at once can't both seal one: a day has one entry (ledger_one_day) and the chain can't fork (prev_hash
+// UNIQUE), so the loser reads the winner's.
+export async function dayEntry(db, day, level, t, wingOf) {
+  let record = null;
   for (let i = 0; i < 3; i++) {
-    const got = await db.prepare("SELECT hash FROM ledger WHERE kind = 'day' AND day = ?").bind(day).first();
-    if (got) return got.hash;
+    const got = await db.prepare("SELECT hash, record FROM ledger WHERE kind = 'day' AND day = ?").bind(day).first();
+    if (got) return { hash: got.hash, wing: JSON.parse(got.record).wing };
+    record ||= JSON.stringify({ day, level: level.name, floor: level.seed, wing: await wingOf() });
     const prev = await head(db), hash = await sha256(prev + "|" + record);
     try {
       await db.prepare("INSERT INTO ledger (kind, day, run_id, record, prev_hash, hash, created_at) VALUES ('day', ?, NULL, ?, ?, ?, ?)")
         .bind(day, record, prev, hash, t).run();
-      return hash;
+      return { hash, wing: JSON.parse(record).wing };
     } catch (e) { if (!isUnique(e)) throw e; }
   }
   throw new Error("the ledger is busy");

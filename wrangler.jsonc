@@ -17,6 +17,12 @@
       "binding": "DB",
       "database_name": "cft-db",
       "database_id": "c901f5df-a8cc-4ce2-afd9-774282c20d52"
+    },
+    // 4Dungeon's board, read only: how far its players have opened the quarter's floor (wingsOpened in src/worker.js)
+    {
+      "binding": "DUNGEON",
+      "database_name": "daily-dungeon-board",
+      "database_id": "a6dedccb-27e0-4988-84ea-64c7cd71c0ee"
     }
   ],
   // the shared save codes and passkeys (the dungeon-items Worker, `Accounts` entrypoint; see its ACCOUNTS.md)

@@ -1,7 +1,8 @@
 // TILT.EXE Worker (repo, Worker and game id still clutch-feed-tilt). The page and its files are static assets; /api/* comes here first.
 //
-//   GET  /api/today                    { day, seed, name, run, ghosts }: today's date in UTC (from the server's clock, so a
-//                                      wrong phone clock can't pick another day), its seed, your name if you have a player,
+//   GET  /api/today                    { day, seed, wing, name, run, ghosts }: today's date in UTC (from the server's clock,
+//                                      so a wrong phone clock can't pick another day), its seed and how far its floor is
+//                                      open (corridor.js corridor), your name if you have a player,
 //                                      your run today if you've sealed one, and up to 3 other players' sealed runs today
 //                                      (name and inputs) for your ghost teammates
 //   POST /api/run {day, inputs}        seal today's run on the ledger (one per player per day): the server plays it
@@ -79,9 +80,31 @@ export async function sha256(text) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-// The day's seed: the first 4 bytes of the hash of the day's ledger entry (sealed now if it isn't yet).
+// The day's map: { seed, wing }. The seed is the first 4 bytes of the hash of the day's ledger entry (sealed now if it
+// isn't yet); wing is how far the floor is open, from the entry's record.
 export async function daySeed(env, day) {
-  return parseInt((await dayEntry(env.DB, day, C.level(day), now())).slice(0, 8), 16);
+  const L = C.level(day), e = await dayEntry(env.DB, day, L, now(), () => wingsOpened(env, day, L));
+  return { seed: parseInt(e.hash.slice(0, 8), 16), wing: e.wing };
+}
+
+// How far 4Dungeon's players have opened this quarter's floor, asked once a day (when the day is sealed): 4Dungeon's
+// board (the daily-dungeon-board D1, bound here as DUNGEON, read only) counts the players who opened each wing's locked
+// doors, in `tallies` keyed "day:climb:wing" (daily-dungeon leaderboard/worker.js tallyDoor; day is days since 1970,
+// UTC). Opening wing w's door builds wing w + 1, so the floor is open to the furthest of those, plus one (1-based, plus
+// one more). Read by the key's range over the quarter's days so far, so a few rows however big the table gets; rows are
+// kept 3 days, and wings open in order, so the furthest is still there. With none (or no board), the run's RUN_WINGS.
+export async function wingsOpened(env, day, L) {
+  const today = Math.floor(Date.parse(day + "T00:00:00Z") / 86400000);
+  let furthest = -2;
+  try {
+    const { results } = await env.DUNGEON.prepare("SELECT k FROM tallies WHERE k >= ?1 AND k < ?2")
+      .bind(L.first + ":", (today + 1) + ":").all();
+    for (const { k } of results) {
+      const [d, , w] = String(k).split(":").map(Number);
+      if (d >= L.first && d <= today && w >= 0) furthest = Math.max(furthest, w);
+    }
+  } catch (e) {}
+  return Math.min(C.WINGS, Math.max(C.RUN_WINGS, furthest + 2));
 }
 
 function newToken() {
@@ -146,7 +169,8 @@ const withCookie = (res, cookie) => { for (const c of [cookie].flat()) if (c) re
 async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
-  return json({ day, seed: await daySeed(env, day), name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null,
+  const { seed, wing } = await daySeed(env, day);
+  return json({ day, seed, wing, name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null,
                 ghosts: await ghostsOf(env, day, player ? player.id : 0) });
 }
 
@@ -178,7 +202,8 @@ async function runOf(env, playerId, day) {
 async function saveRun(req, env) {
   const b = await body(req), day = utcDay();
   if (b.day !== day) throw new Oops("That day's corridor is over. This run can't be sealed.", 409);
-  const R = C.replay(C.corridor(await daySeed(env, day), day), b.inputs);
+  const { seed, wing } = await daySeed(env, day);
+  const R = C.replay(C.corridor(seed, day, wing), b.inputs);
   if (!R) throw new Oops("That run doesn't add up. It wasn't sealed.");
   const { hp, shots, hits, log } = R;
   const { player, cookie } = await needPlayer(req, env);

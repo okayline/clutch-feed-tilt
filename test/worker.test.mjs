@@ -66,12 +66,18 @@ function fakeAccounts() {
     async passkeyRemove(id, kid) { const e = [...keys].find(([, v]) => v.acct === id && v.id === kid); if (!e) return err("No such passkey.", 404); keys.delete(e[0]); return { ok: true }; },
   };
 }
+// 4Dungeon's board (daily-dungeon-board), only the table read here: the CREATE is daily-dungeon leaderboard/worker.js giftTable's
+function fakeBoard() {
+  const d = fakeD1.call(null);
+  d.raw.exec("CREATE TABLE tallies (k TEXT NOT NULL, door INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0, made INTEGER NOT NULL, PRIMARY KEY (k, door))");
+  return d;
+}
 const T0 = Date.parse("2027-01-01T08:00:00Z") / 1000;
 
 function setup() {
   let t = T0;
   setClock(() => t);
-  const env = { DB: fakeD1(), ACCOUNTS: fakeAccounts(), REGISTRY: { sent: [], async checkpoint(c) { this.sent.push(c); return { ok: true, created: true }; } } };
+  const env = { DB: fakeD1(), DUNGEON: fakeBoard(), ACCOUNTS: fakeAccounts(), REGISTRY: { sent: [], async checkpoint(c) { this.sent.push(c); return { ok: true, created: true }; } } };
   const jar = {};
   const call = async (who, method, path, body) => {
     const headers = { "content-type": "application/json" };
@@ -89,12 +95,13 @@ function setup() {
 
 const sha = (t) => createHash("sha256").update(t).digest("hex");
 // the day's ledger record: the day and its 4Dungeon level (level() has its own test in engine.test.mjs)
-const dayRec = (day) => { const L = level(day); return JSON.stringify({ day, level: L.name, floor: L.seed, wing: L.wing + 1 }); };
+// and how far the floor is open: the run's 2 wings when 4Dungeon's board has no tallies
+const dayRec = (day, wing = 2) => { const L = level(day); return JSON.stringify({ day, level: L.name, floor: L.seed, wing }); };
 
 test("the day's seed: the first 4 bytes of the hash of the day's ledger entry; /api/today gives the UTC day, its seed, your name and your run", async () => {
   const { env, call } = setup();
   const t = await call("ann", "GET", "/api/today"), dayHash = sha("0".repeat(64) + "|" + dayRec("2027-01-01"));
-  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), name: null, run: null, ghosts: [] });
+  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), wing: 2, name: null, run: null, ghosts: [] });
   assert.equal((await call("bo", "GET", "/api/today")).seed, t.seed, "the same seed for everyone");
   assert.deepEqual(env.DB.raw.prepare("SELECT kind, record, hash FROM ledger").all().map((r) => ({ ...r })),
     [{ kind: "day", record: dayRec("2027-01-01"), hash: dayHash }], "one day entry, sealed by the first request");
@@ -155,7 +162,7 @@ test("a run is sealed on the ledger: the server plays it again from its inputs, 
   const { env, call } = setup();
   const day = "2027-01-01", dayHash = sha("0".repeat(64) + "|" + dayRec(day)), seed = parseInt(dayHash.slice(0, 8), 16);
   // played the way the page plays it (as in engine.test.mjs): walk to the exit, shoot what comes out, and some misses
-  const live = playBot(C.corridor(seed, day), { shootWall: 9 });
+  const live = playBot(C.corridor(seed, day, 2), { shootWall: 9 });
   assert.ok(live.escaped && live.shots > live.hits);
   const inputs = live.log.map((s) => s.slice(0, 3));
   const sh = inputs.findIndex((s) => s[1] === 2);
@@ -195,7 +202,7 @@ test("a run is sealed on the ledger: the server plays it again from its inputs, 
 test("ghosts: /api/today gives up to 3 other players' runs that day, newest first, with their names and inputs (not yours, not other days')", async () => {
   const { env, call } = setup();
   const day = "2027-01-01", seed = (await call("x", "GET", "/api/today")).seed;
-  const live = playBot(C.corridor(seed, day)), inputs = live.log.map((s) => s.slice(0, 3));
+  const live = playBot(C.corridor(seed, day, 2)), inputs = live.log.map((s) => s.slice(0, 3));
   for (const [i, who] of ["ann", "bo", "cy", "di", "ed"].entries()) {
     setClock(() => T0 + i * 3601);   // an hour apart, under the new-player limit, all on the same UTC day
     await call(who, "POST", "/api/codes", { action: "new" });   // a player with a name
@@ -209,4 +216,26 @@ test("ghosts: /api/today gives up to 3 other players' runs that day, newest firs
   assert.deepEqual(t.ghosts[0].inputs, inputs, "the inputs as sent, to play again");
   const plan = env.DB.raw.prepare("EXPLAIN QUERY PLAN SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT 3").all(day, 1);
   assert.ok(plan.some((r) => /USING INDEX runs_day/.test(r.detail)), "read through the runs_day index: " + JSON.stringify(plan.map((r) => r.detail)));
+});
+
+test("how far the floor is open: the furthest wing 4Dungeon's players opened this quarter, plus 2 (counting from 1), read once when the day is sealed", async () => {
+  const { env, call } = setup();
+  // 2027-01-01 is day 20819 since 1970; its quarter (B1F, wing 1 from 0, in engine.test.mjs's terms) began on day 20818
+  assert.equal(Date.parse("2027-01-01") / 86400000, 20819);
+  assert.deepEqual([level("2027-01-01").wing, level("2027-01-01").first], [1, 20818]);
+  const add = (k, door) => env.DUNGEON.raw.prepare("INSERT INTO tallies (k, door, n, made) VALUES (?, ?, 1, 0)").run(k, door);
+  add("20817:1:5", 0);   // the quarter before: not counted
+  add("20818:2:1", 1);   // opened wing 1's door: wing 2 (from 0) is built
+  add("20819:1:3", 0);   // today, wing 3's door: wing 4 built, so open to wing 5 (from 1)
+  add("20820:1:6", 0);   // tomorrow (a wrong clock): not counted
+  const t = await call("ann", "GET", "/api/today");
+  assert.equal(t.wing, 5);
+  assert.equal(env.DB.raw.prepare("SELECT record FROM ledger").get().record, dayRec("2027-01-01", 5), "on the day's ledger entry");
+  add("20819:1:4", 1);
+  assert.equal((await call("bo", "GET", "/api/today")).wing, 5, "fixed for the day once sealed");
+  const plan = env.DUNGEON.raw.prepare("EXPLAIN QUERY PLAN SELECT k FROM tallies WHERE k >= ?1 AND k < ?2").all("20818:", "20820:");
+  assert.ok(plan.some((r) => /USING (COVERING )?INDEX sqlite_autoindex_tallies_1 \(k>\? AND k<\?\)/.test(r.detail)), "a range of the key: " + JSON.stringify(plan.map((r) => r.detail)));
+  // a day with no board to ask (or no tallies): the run's 2 wings
+  const other = setup(); delete other.env.DUNGEON;
+  assert.equal((await other.call("cy", "GET", "/api/today")).wing, 2);
 });

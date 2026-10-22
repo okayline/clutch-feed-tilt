@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.12 — "As Far As They've Gone"
+**Wed Oct 21, 2026 · 2:50 PM HST**
+
+- The floor is open as far as 4Dungeon's players have opened it this quarter, read once when the day starts and kept on the day's ledger entry. Today's two wings are the last two of those, and the exit is the door into the next one. Removed: every wing of the floor open every day.
+- A sealed door (the other door of a pair that was opened) is plain wall, as on the minimap. Removed: sealed doors drawn as locked # doors.
+
 ## v0.11.1 — "Drones"
 **Wed Oct 21, 2026 · 2:40 PM HST**
 

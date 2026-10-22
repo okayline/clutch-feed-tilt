@@ -1,7 +1,8 @@
 // TILT.EXE. The rules, shared by the page and the tests. Pure functions only: no network, no storage.
 //
 // Each UTC day has one map, the same for everyone. Its wings are the real 4Dungeon floor of that moon quarter
-// (level(day)); the day's ledger entry gives the seed (/api/today) that opens its doors. corridor(seed, day) lays out
+// (level(day)), opened as far as 4Dungeon's players have opened it; the day's ledger entry gives that and the seed
+// (/api/today) that picks its doors. corridor(seed, day, wing) lays out
 // the rooms, where you start, the exit door, and the 5 enemies' notches. You walk anywhere on it (WASD) and turn with
 // the mouse; the run ends when you walk through the exit, die, or run out of time.
 // label() names a finished run: CLUTCH, FEED or TILT.
@@ -12,7 +13,7 @@ export const ENEMIES = 5;   // enemies on the map, all yours to shoot
 export const HP = 3;
 export const S = 7;         // one room of the map is 7 x 7 tiles: walls on its edge, 5 x 5 open inside, doors 3 tiles wide
 export const WINGS = 7;     // a whole 4Dungeon floor: 7 wings, as a player who arrives on its first day gets one
-export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's own wing
+export const RUN_WINGS = 2; // the wings one day's run goes through, ending with the day's wing
 
 // A small seeded random number generator (mulberry32): the same seed always gives the same numbers.
 export function rng(seed) {
@@ -37,21 +38,23 @@ const levelName = h => (h <= 4 ? `B${5 - h}F` : `${h - 4}F`);
 
 // The 4Dungeon level a UTC day ("YYYY-MM-DD") belongs to: the moon quarter at 00:00 UTC that day. name is B4F to B1F;
 // seed is its shared floor seed (rules.js arrive()); wing is the day's own wing, one a day from the quarter's first
-// UTC day, as 4Dungeon opens one door a day (0 to 6).
+// UTC day, as 4Dungeon opens one door a day (0 to 6); first is that first UTC day (days since 1970).
 export function level(day) {
   const t = Date.parse(day + "T00:00:00Z"), n = Math.floor((t - QREF) / QLEN);
   const q = ((n % 4) + 4) % 4, epoch = Math.floor(n / 4), height = q + 1;
   const wing = Math.min(WINGS - 1, Math.floor(t / 86400000) - Math.floor((QREF + n * QLEN) / 86400000));
-  return { name: levelName(height), seed: seedFrom(epoch, height), wing };
+  return { name: levelName(height), seed: seedFrom(epoch, height), wing, first: Math.floor((QREF + n * QLEN) / 86400000) };
 }
 
 // The day's map. 4Dungeon's wing generator (engine/floor.js) builds that quarter's floor from its shared seed, and at
-// every offer of two locked doors the day's seed opens one, so the whole floor is one a 4Dungeon player could walk.
-// The run is on RUN_WINGS wings ending with the day's own (or the first two, early in the quarter): you start in the
-// first room of the first of them, facing north (up on the minimap), and the exit is the door into the room behind its
-// last offer (the stairs, on the floor's last wing). Every room of the floor is built, so the 3D view has a door
-// wherever the minimap (4Dungeon's) shows one; the enemies are only in the run's wings. A locked door that wasn't opened
-// is wall, drawn as a locked door.
+// every offer of two locked doors the day's seed opens one, so the floor is one a 4Dungeon player could walk. `wing`
+// (1 to WINGS, from the day's ledger entry) is the furthest wing 4Dungeon's players had opened when the day was sealed:
+// the floor is open that far, and the run is on the RUN_WINGS wings ending with it (or the first two, early in the
+// quarter). You start in the first room of the first of them, facing north (up on the minimap), and the exit is the
+// door into the room behind its last offer (the stairs, on the floor's last wing). Every open room is built, so the 3D
+// view has a door wherever the minimap (4Dungeon's) shows one; the enemies are only in the run's wings. A locked door
+// is wall, drawn as a locked door; a sealed one (the other door of an offer that was opened) is plain wall, as on the
+// minimap.
 //   floor       the wing generator's floor (for the minimap)
 //   level       level(day)
 //   route       the room numbers of the shortest way from the first room to the goal, through open doors
@@ -65,14 +68,14 @@ export function level(day) {
 //   enemies     [{ x, y, tx, ty, room, guard, fire, kind }]: the notch in a wall an enemy waits in, where it steps out to,
 //               its room, whether it guards the exit, seconds from stepping out until it first fires, and its kind
 //               (KINDS, in turn)
-export function corridor(seed, day) {
-  const R = rng(seed), L = level(day);
+export function corridor(seed, day, wing) {
+  const R = rng(seed), L = level(day), b = Math.max(RUN_WINGS - 1, wing - 1), a = b - (RUN_WINGS - 1);
   const floor = FLOOR.generate(L.seed, L.seed, { days: WINGS });
-  for (let n = 0; n < 20 && FLOOR.lockedDoors(floor).length; n++) {
+  for (let n = 0; n <= b && FLOOR.lockedDoors(floor).length; n++) {   // open doors until the wing behind the run's last is built
     const doors = FLOOR.lockedDoors(floor);
     FLOOR.growDoor(floor, doors[Math.floor(R() * doors.length)]);
   }
-  const rooms = floor.rooms, a = Math.max(0, L.wing - (RUN_WINGS - 1)), b = Math.max(RUN_WINGS - 1, L.wing);
+  const rooms = floor.rooms;
   const goal = b + 1 < floor.wings.length ? floor.wings[b + 1].rooms[0] : floor.stairs;
   const shown = new Set([goal, ...floor.wings.slice(a, b + 1).flatMap((w) => w.rooms)]);
   // the shortest way through open doors between shown rooms, from the first wing's first room to the goal
@@ -104,7 +107,10 @@ export function corridor(seed, day) {
     for (let dy = 1; dy < S - 1; dy++) for (let dx = 1; dx < S - 1; dx++) open[y + dy][x + dx] = true;
     near[i] = [i];
     for (const [d, j] of Object.entries(rooms[i].doors)) {
-      if (!rooms[j]) { for (const [tx, ty] of doorTiles(i, d)) locked[tx + "," + ty] = 1; continue; }   // a locked door nobody opened
+      if (!rooms[j]) {   // a locked door nobody opened yet, or a sealed one (plain wall)
+        if (!(floor.sealed && floor.sealed[j])) for (const [tx, ty] of doorTiles(i, d)) locked[tx + "," + ty] = 1;
+        continue;
+      }
       for (const [tx, ty] of doorTiles(i, d)) open[ty][tx] = true;
       near[i].push(j);
     }
