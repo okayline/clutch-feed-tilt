@@ -4,6 +4,14 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.18.1 — "Spare Mag"
+**Wed Oct 21, 2026 · 7:25 PM HST**
+
+- On a phone, the ammo count is a button: tap [15/17] at the end of the TILT row to reload. Removed: phones having no way to reload before the magazine ran dry.
+- A ghost teammate only plays if their run ends now as it was sealed (the same HP, shots and hits). A run sealed earlier the same day, before a rules change, is left out. Removed: those runs playing out differently from what really happened.
+
+---
+
 ## v0.18.0 — "Hard Targets"
 **Wed Oct 21, 2026 · 5:05 PM HST**
 

@@ -44,10 +44,11 @@ function build() {
   P = Object.assign(C.newRun(cor), { aimY: H / 2 - 1, sway: 0, jit: 0, flash: 0, gibs: [], hurt: 0, left: C.ENEMIES, done: null, seen: [cor.route[0]] });
   enemies = P.enemies; lag = 0; turnLeft = 0;
   // Ghost teammates: other players' sealed runs today (/api/today ghosts), played again here (corridor.js replay) to
-  // get where they were on every tick. They walk beside you; what they did is told in the kill feed as it happens.
+  // get where they were on every tick. They walk beside you; what they did is told in the kill feed as it happens. A run
+  // sealed under older rules doesn't end as it was sealed and is left out (corridor.js ghostRun).
   squad = GHOSTS.map((g) => {
     const track = [];
-    const R = C.replay(cor, g.inputs, (r) => track.push({ x: r.x, y: r.y, hp: r.hp, k: r.kills, over: r.over, out: r.escaped }));
+    const R = C.ghostRun(cor, g, (r) => track.push({ x: r.x, y: r.y, hp: r.hp, k: r.kills, over: r.over, out: r.escaped }));
     return R && track.length ? { n: g.name, track } : null;
   }).filter(Boolean);
   feed = [];
@@ -330,7 +331,9 @@ function frame(message) {
     ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
-    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["  " + time, "t"], ["  " + (P.reload > 0 ? "RELOAD" : P.ammo + "/" + C.MAG), P.reload > 0 ? "e" : P.ammo <= 3 ? "g" : "t"]],
+    [[" TILT ", "t"], ["[" + "#".repeat(tilt) + ".".repeat(5 - tilt) + "]", tilt >= 3 ? "e" : tilt ? "g" : "d"], ["  " + time, "t"], ["  ", ""],
+     // on a phone the ammo is the reload button (R on a keyboard)
+     [P.reload > 0 ? "RELOAD" : touch ? `[${P.ammo}/${C.MAG}]` : P.ammo + "/" + C.MAG, P.reload > 0 ? "e" : P.ammo <= 3 ? "g" : touch ? "btn" : "t", touch && !P.reload ? "ammo" : ""]],
   ];
   const over = userOpen() || ledgerOpen();   // a panel covers the 3D view and the run waits
   const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
@@ -633,7 +636,7 @@ $("version").textContent = "v" + VERSION;
 setupAccount((name) => { myName = name; });
 setupLedger();
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
-$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); });
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); else if (s.dataset.k === "ammo" && canPlay() && C.reload(P)) say("RELOADING", "g"); });
 addEventListener("keydown", (ev) => {
   if (userOpen() || ledgerOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const b = KEYS[ev.key.toLowerCase()];

@@ -493,3 +493,10 @@ export function replay(cor, inputs, onTick) {
   while (!R.over) step();
   return R;
 }
+
+// A ghost teammate is another player's sealed run played again (record { inputs, hp, shots, hits }). It is played only
+// if it ends as it was sealed: a run sealed before a rules change (HP, the crown, the scatter) plays out differently now.
+export function ghostRun(cor, g, onTick) {
+  const R = replay(cor, g.inputs, onTick);
+  return R && R.hp === g.hp && R.shots === g.shots && R.hits === g.hits ? R : null;
+}

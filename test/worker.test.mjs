@@ -214,6 +214,8 @@ test("ghosts: /api/today gives up to 3 other players' runs that day, newest firs
   const t = await call("ann", "GET", "/api/today");
   assert.deepEqual(t.ghosts.map((g) => g.name), [name("di"), name("cy")], "ed's run is old-style; ann's own is left out; at most 3 read");
   assert.deepEqual(t.ghosts[0].inputs, inputs, "the inputs as sent, to play again");
+  const sealed = JSON.parse(env.DB.raw.prepare("SELECT record FROM ledger WHERE kind = 'run' ORDER BY id DESC LIMIT 1 OFFSET 1").get().record);
+  assert.deepEqual([t.ghosts[0].hp, t.ghosts[0].shots, t.ghosts[0].hits], [sealed.hp, sealed.shots, sealed.hits], "with the HP, shots and hits it was sealed with");
   const plan = env.DB.raw.prepare("EXPLAIN QUERY PLAN SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT 3").all(day, 1);
   assert.ok(plan.some((r) => /USING INDEX runs_day/.test(r.detail)), "read through the runs_day index: " + JSON.stringify(plan.map((r) => r.detail)));
 });
