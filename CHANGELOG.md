@@ -4,6 +4,16 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.15.0 — "Magazine"
+**Wed Oct 21, 2026 · 4:14 PM HST**
+
+- You have a Glock 17's magazine: 17 rounds, shown at the end of the TILT row (`17/17`, yellow at 3 or fewer, red `RELOAD` while reloading). R reloads: 1.5 seconds with no shot possible, then a full magazine; the rounds left in the old one are dropped. An empty magazine reloads by itself. A click while reloading does nothing and isn't a shot. Removed: unlimited shots.
+- The crown does 5 damage, half an enemy's 10 HP. Two crown shots drop an enemy, as do 3 non-crown head shots or 2 chest and 2 head; 5 chest shots do too. Removed: the crown dropping an enemy at once.
+- A reload is a new input, [tick, 3, 0], in the run's log. A run that shoots during a reload, or reloads with a full magazine, doesn't replay.
+- These change the rules (corridor.js: the magazine, reloading, the crown's damage), so a run sealed before this replays differently as a ghost, and one that fired more than 17 shots without a reload is left out of the ghosts.
+
+---
+
 ## v0.14.0 — "No Fog"
 **Wed Oct 21, 2026 · 4:06 PM HST**
 

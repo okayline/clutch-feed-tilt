@@ -188,11 +188,13 @@ test("short, tall, drone in turn; a drone dies to two hits on its O; a short one
   assert.deepEqual([1, 2, 3].map(() => C.fire(Q, head[1])), ["head", "head", "headkill"], "head 4 each: 4, 8, 12");
   assert.equal(b.state, "dying");
   const [S, c, cb] = shorts();
-  assert.deepEqual([C.fire(S, cb.top), c.state], ["headkill", "dying"], "the crown drops it at once");
-  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [5, 1, 3, 1]);
-  // the crown is the middle half of its cell: within 0.25 of the row's middle drops it, further out is a plain head hit (4)
-  const centre = (dy) => { const [X, , xb] = shorts(); return C.fire(X, xb.top + dy); };
-  assert.deepEqual([centre(0), centre(0.25), centre(-0.25), centre(0.3), centre(-0.4), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"]);
+  assert.deepEqual([C.fire(S, cb.top), C.fire(S, cb.top), c.state], ["head", "headkill", "dying"], "the crown is 5: two drop it");
+  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [5, 1, 3, 2]);
+  // the crown is the middle half of its cell: within 0.25 of the row's middle is 5 (two drop it), further out is a plain head hit (4: the second shot leaves it up)
+  const centre = (dy) => { const [X, , xb] = shorts(); C.fire(X, xb.top + dy); return C.fire(X, xb.top + dy); };
+  assert.deepEqual([centre(0), centre(0.25), centre(-0.25), centre(0.3), centre(-0.4), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"], "a second plain head hit makes 8, not a kill");
+  const [Y, y] = shorts(); const yb = C.enemyBox(C.eyeOf(Y), y), hr = rows(yb, "@");
+  assert.deepEqual([C.fire(Y, yb.top), C.fire(Y, hr[1]), C.fire(Y, rows(yb, "#")[0]), y.state], ["head", "head", "kill", "dying"], "crown 5 + head 4 + chest 2 = 11 drops it");
 });
 
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
@@ -251,4 +253,38 @@ test("a drone fires half as often as the others: every 50 ticks against 25, once
   };
   assert.deepEqual(hits("short"), [25, 25]);
   assert.deepEqual(hits("drone"), [50, 50]);
+});
+
+test("a magazine of 17: shots 1 to 17 fire, then 23 ticks of reload where a click does nothing and isn't logged, then 17 more", () => {
+  const R = C.newRun(C.corridor(12345, "2026-10-21", 2));
+  for (let n = 0; n < C.MAG; n++) assert.notEqual(C.fire(R, 10), "dry");
+  assert.deepEqual([R.shots, R.ammo, R.reload, R.log.length], [17, 0, C.RELOAD_TICKS, 17]);
+  assert.equal(C.fire(R, 10), "dry"); assert.deepEqual([R.shots, R.log.length], [17, 17], "a dry click is no shot and isn't logged");
+  for (let n = 0; n < C.RELOAD_TICKS - 1; n++) C.tick(R);
+  assert.equal(C.fire(R, 10), "dry", "one tick short");
+  C.tick(R);
+  assert.deepEqual([R.ammo, R.reload], [17, 0]);
+  assert.notEqual(C.fire(R, 10), "dry");
+  assert.deepEqual([R.shots, R.ammo], [18, 16]);
+});
+
+test("a replay with a shot during a reload is refused", () => {
+  const cor = C.corridor(12345, "2026-10-21", 2);
+  const inputs = Array.from({ length: 18 }, () => [1, 2, 10]);
+  assert.equal(C.replay(cor, inputs), null);
+});
+
+test("reload (R): refused with a full magazine; otherwise 23 ticks, the old rounds dropped, logged [tick, 3, 0], and it replays", () => {
+  const cor = C.corridor(12345, "2026-10-21", 2), R = C.newRun(cor);
+  assert.equal(C.reload(R), false, "a full magazine");
+  C.fire(R, 10); C.fire(R, 10);
+  assert.deepEqual([C.reload(R), R.reload, R.log.at(-1)], [true, C.RELOAD_TICKS, [0, 3, 0]]);
+  assert.equal(C.reload(R), false, "already reloading");
+  assert.equal(C.fire(R, 10), "dry");
+  for (let n = 0; n < C.RELOAD_TICKS; n++) C.tick(R);
+  assert.deepEqual([R.ammo, R.reload], [C.MAG, 0], "a full magazine, the 15 left dropped");
+  const again = C.replay(cor, R.log.map((s) => s.slice(0, 3)));
+  assert.deepEqual([again.shots, again.log], [R.shots, R.log], "the same inputs replay to the same shots and log");
+  assert.equal(C.replay(cor, [[0, 3, 0]]), null, "a reload with a full magazine can't have happened");
+  assert.equal(C.replay(cor, [[0, 3, 1]]), null, "a reload carries 0");
 });
