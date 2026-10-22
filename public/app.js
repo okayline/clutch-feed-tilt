@@ -385,6 +385,9 @@ document.addEventListener("pointerlockerror", () => { lockWorks = false; });
 view.addEventListener("pointerdown", (ev) => {
   if (!P) return;
   ev.preventDefault();
+  // preventDefault stops the click from focusing the page, so W A S D would go to whatever had focus (the page around
+  // it, when the game is in a frame): focus the view by hand
+  window.focus(); view.focus({ preventScroll: true });
   if (ev.pointerType === "touch") return touchDown(ev);
   touch = false;
   if (!locked() && lockWorks && canPlay()) {
