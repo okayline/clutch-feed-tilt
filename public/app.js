@@ -66,7 +66,55 @@ const SPIN_TICKS = 3;   // a drone's rotors turn every 3 frames
 const GLITCH_GLYPHS = "#%!&$*?/\\<>=+~", GLITCH = { short: 0.25, tall: 0.25, drone: 0.1 }, GLITCH_HOLD = 2;   // a drone glitches less; a scrambled glyph stays 2 frames
 // a number from 0 to 1 for a cell and a moment, the same all through one GLITCH_HOLD
 const noise = (x, y, t) => { let h = Math.imul(x * 374761393 + y * 668265263 + t * 2246822519, 3266489917); h ^= h >>> 15; h = Math.imul(h, 2654435761); h ^= h >>> 13; return (h >>> 0) / 4294967296; };
-const eye = () => C.eyeOf(P);
+// Dying, as Doom does it (p_user.c P_DeathThink, "fall on your face"): the view sinks to the floor and turns to face the
+// nearest enemy, red; then the view melts down the screen in columns, each after its own short delay with its neighbours
+// close behind (Doom's screen melt, f_wipe.c), digital: a band of red glitch at each column's top edge, and FRAGGED
+// underneath. Drawing only: the run was over the moment you died. Then the FEED banner. Skipped with Reduce Motion.
+const FALL = 0.8, MELT_AT = 1.8, SINK = 0.42, FRAG_HOLD = 2.2, FRAG_FADE = 1.2, FRAG_BLACK = 0.8;   // then FRAGGED holds, fades out to black like GTA's WASTED, a beat on black, and the FEED banner fades in   // fall for 0.8 s, lie there a beat (1 s), then melt, at half speed
+const dying = () => P && P.deathT !== undefined;
+const eye = () => { if (!dying()) return C.eyeOf(P); const [dy, dx] = C.sincos(P.viewA); return { x: P.x, y: P.y, dx, dy }; };
+// The screen melt, Doom's way between scenes (f_wipe.c): the old picture slides down off the view in columns, each after
+// its own short delay with its neighbours close behind, uncovering the new one; digital here, with a band of red glitch
+// along each column's top edge. Used when the corridor first shows (off a title card), on Run It Back (off the last
+// frame), when you get out (onto YOU GOT OUT) and when you die (onto FRAGGED). The fight waits while it runs. Drawing only;
+// skipped with Reduce Motion.
+let wipe = null;   // { oldCh, oldCl, card (what it uncovers; none: the live view), t, d (each column's delay), then }
+const MELT_SPEED = H / 1.4;   // rows a second
+function meltDelays() {
+  const d = [];
+  // a ragged start: each column up to 0.15 s off its neighbour, and anywhere from 0 to 0.7 s in all, so the strips come
+  // down at different times (Doom's are a random walk too, f_wipe.c wipe_initMelt)
+  for (let x = 0, v = Math.random() * 0.4; x < W; x++) { v = Math.max(0, Math.min(0.7, v + (Math.random() - 0.5) * 0.3)); d.push(v); }
+  return d;
+}
+function card(lines) {   // [[text, class], ...] centred down the middle of a blank view
+  const c = { ch: Array.from({ length: H }, () => new Array(W).fill(" ")), cl: Array.from({ length: H }, () => new Array(W).fill("")) };
+  lines.forEach(([t, k], i) => { const y = Math.floor(H / 2 - lines.length / 2) + i, x0 = Math.floor(W / 2 - t.length / 2); [...t].forEach((ch, j) => { c.ch[y][x0 + j] = ch; c.cl[y][x0 + j] = ch === " " ? "" : k; }); });
+  return c;
+}
+function startWipe(old, cardOf, then, speed = MELT_SPEED) {
+  if (reduced) { if (then) then(); return; }
+  wipe = { oldCh: old && old.ch, oldCl: old && old.cl, card: cardOf, t: 0, d: meltDelays(), then, speed };
+}
+const FRAGGED = card([["F R A G G E D", "e"]]);
+const snapshot = () => ({ ch: ch.map((r) => r.slice()), cl: cl.map((r) => r.slice()) });
+// draw the melt over what render() put in ch and cl; true when every column is off the bottom
+function drawWipe() {
+  if (!wipe.oldCh) Object.assign(wipe, { oldCh: snapshot().ch, oldCl: snapshot().cl });   // melt the view as it is now
+  const nu = wipe.card || snapshot(), g = Math.floor(wipe.t * C.FPS);
+  let done = true;
+  for (let x = 0; x < W; x++) {
+    const dt = Math.max(0, wipe.t - wipe.d[x]), o = Math.floor(dt * wipe.speed * (0.4 + 1.2 * Math.min(1, dt / 0.5)));   // each strip starts slow and speeds up, as Doom's do
+    if (o < H) done = false;
+    for (let y = 0; y < H; y++) {
+      if (y >= o) { ch[y][x] = wipe.oldCh[y - o][x]; cl[y][x] = wipe.oldCl[y - o][x]; }
+      else if (y >= o - 2) { ch[y][x] = GLITCH_GLYPHS[Math.floor(noise(x, y, g) * GLITCH_GLYPHS.length)]; cl[y][x] = "e"; }
+      else { ch[y][x] = nu.ch[y][x]; cl[y][x] = nu.cl[y][x]; }
+    }
+  }
+  return done;
+}
+const eyeH = () => dying() ? 0.5 - SINK * Math.min(1, P.deathT / FALL) ** 0.6 : 0.5;   // how high your eye is off the floor, in wall heights
 const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
@@ -79,7 +127,7 @@ function render() {
   // the camera: where you stand, the way you face. Each column looks COL further round than the one to its left and the
   // walls are as tall as they are near, not as the ray is deep, so turning slides the picture sideways and changes
   // nothing else: 15 degrees moves it exactly 21 columns.
-  const E = eye(), { x: px, y: py } = E;
+  const E = eye(), { x: px, y: py } = E, EH = eyeH();
   // Walls are outlines, as 4Dungeon draws them (daily-dungeon screen.js renderView), with no horizontal lines: a wall's
   // top and bottom edges are a \ or / where they slope away from you and nothing where they run flat, an upright |
   // marks every corner (where one flat stretch of wall meets another, or ends against one further away), and a wall
@@ -102,7 +150,7 @@ function render() {
     // its top and bottom, unrounded: each column is as tall as the wall is near along its ray, so a wall beside you
     // narrows away. A wall is TALL times as high as you see from the floor up to your eye and back down, standing on the
     // same floor as the enemies (corridor.js enemyBox), so it rises above you to the ceiling.
-    h.t = H / 2 - (TALL - 0.5) * H / Math.max(0.3, d); h.b = H / 2 + 0.5 * H / Math.max(0.3, d);
+    h.t = H / 2 - (TALL - EH) * H / Math.max(0.3, d); h.b = H / 2 + EH * H / Math.max(0.3, d);
     hits.push(h);
   }
   // are columns x and x + 1 on the same stretch of wall?
@@ -146,13 +194,13 @@ function render() {
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
-      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
+      const rd = EH * H / (y + 0.5 - H / 2); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
     // the ceiling: the same lines, overhead, where the walls' tops meet it
     for (let y = Math.min(top, H / 2 - 1) - 1; y >= 0; y--) {
-      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
+      const rd = (TALL - EH) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
@@ -166,7 +214,8 @@ function render() {
   const wipeOf = (e) => e.diedAt === undefined ? -1 : (P.tick - e.diedAt) / (WIPE * C.FPS);
   const vis = [...enemies.filter((e) => e.state !== "hidden" || Math.hypot(e.x - P.x, e.y - P.y) < 9), ...ghosts]
     .map((e) => [e, wipeOf(e) >= 1 ? null : C.enemyBox(E, wipeOf(e) >= 0 ? { ...e, state: "out" } : e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
-  for (const [e, b] of vis) {
+  for (const [e, b0] of vis) {
+    const lift = Math.round((0.5 - EH) * H / b0["ry"]), b = lift ? { ...b0, top: b0.top - lift, bot: b0.bot - lift } : b0;   // a lower eye sees them higher
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
@@ -194,7 +243,7 @@ function render() {
   } });
   // crosshair, in the middle column (corridor.js AIM): you turn to aim, and move it up and down
   const ax = Math.round(C.AIM + P.jit), ay = Math.round(P.aimY);
-  if (!P.done) {
+  if (!P.done && !dying()) {
     put(ax - 2, ay, "-", "b"); put(ax - 1, ay, "-", "b"); put(ax + 1, ay, "-", "b"); put(ax + 2, ay, "-", "b");
     put(ax, ay, P.flash > 0 ? "*" : "+", P.flash > 0 ? "g" : "b"); put(ax, ay - 1, "|", "b"); put(ax, ay + 1, "|", "b");
   }
@@ -202,7 +251,7 @@ function render() {
   // is more than halfway out to the side) and kicking down a row when it fires. P.sway eases back to 0 in step().
   const lean = Math.max(-GUN_SWING, Math.min(GUN_SWING, P.sway));
   const rf = reloadFrame();
-  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf];
+  const gx = Math.round(W / 2 - GUN[0].length / 2 + lean) + [0, 10, 5][rf], gy = H - GUN.length + (Math.abs(lean) > GUN_SWING / 2 ? 1 : 0) + (P.flash > 0 ? 1 : 0) + [0, 4, 2][rf] + (dying() ? Math.round(Math.min(1, P.deathT / FALL) * (GUN.length + 1)) : 0);
   // reloading: two frames. First the gun swings off to the right and drops 4 rows, the grip empty, and the old magazine
   // falls away on its left; then it comes halfway back, 2 rows down, with a full magazine coming up on its left. RELOADING
   // blinks above it the whole time.
@@ -216,6 +265,9 @@ function render() {
   }
   GUN.forEach((s, i) => { for (let k = s.search(/\S/); k <= s.search(/\S\s*$/); k++) put(gx + k, gy + i, magOut && s[k] === "#" ? " " : s[k], P.flash > 0 && i < 4 ? "g" : "t"); });   // solid: the gaps inside it hide what is behind
 
+  if (dying()) for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (ch[y][x] !== " ") cl[y][x] = "e";   // red while you fall
+  if (wipe && drawWipe()) wipe.done = true;
+  else if (dying() && P.fragT !== undefined) for (let y = 0; y < H; y++) { ch[y] = P.black ? new Array(W).fill(" ") : FRAGGED.ch[y].slice(); cl[y] = P.black ? new Array(W).fill("") : FRAGGED.cl[y].slice(); }
   let out = "";
   for (let y = 0; y < H; y++) {
     let run = "", k = cl[y][0];
@@ -352,7 +404,7 @@ function gib(n) {
 }
 
 function shoot() {
-  if (P.done || P.reload > 0) return;
+  if (P.done || dying() || P.reload > 0) return;
   P.flash = 0.08;
   const was = P.streak;
   const hpBefore = P.enemies.reduce((n, e) => n + e.hp, 0);
@@ -370,14 +422,15 @@ function shoot() {
 
 function finish() {
   P.done = C.label(P);
-  if (document.pointerLockElement) document.exitPointerLock();
+  if (document.pointerLockElement && !P.black) document.exitPointerLock();   // after a death, not until the banner has faded in (step)
   endBanner(P.done);
   if (P.practice) P.seal = "PRACTICE MODE. NOT SEALED."; else seal();
 }
 
 // After the run is over: play today's corridor again, as practice. It's never sent, so today's sealed run stays.
 function runItBack() {
-  build(); P.practice = true;
+  const old = snapshot();
+  build(); P.practice = true; startWipe(old);
   $("banner").hidden = true; bannerT = 0;
   say("PRACTICE MODE: this one doesn't count. Your sealed run stays.", "t");
 }
@@ -429,7 +482,29 @@ function step(dt) {
   P.hurt = Math.max(0, P.hurt - dt);
   $("view").classList.toggle("hurt", P.hurt > 0);
   if (bannerT !== Infinity) { bannerT -= dt; if (bannerT <= 0) $("banner").hidden = true; }
+  if (wipe) {   // the fight waits while the screen melts
+    wipe.t += dt; lag = 0;
+    if (wipe.done) { const then = wipe.then; wipe = null; if (then) then(); }
+    if (!P.done && !dying()) return;
+  }
   if (P.done) return;
+  if (dying()) {
+    P.deathT += dt;
+    const tgt = P.killer ? Math.atan2(P.killer.y - P.y, P.killer.x - P.x) : P.viewA;   // turn to face them, 75 degrees a second
+    let dA = tgt - P.viewA; dA -= Math.round(dA / (2 * Math.PI)) * 2 * Math.PI;
+    P.viewA += Math.sign(dA) * Math.min(Math.abs(dA), 75 * Math.PI / 180 * dt);
+    if (P.deathT >= MELT_AT && !wipe && !P.melting) { P.melting = true; startWipe(null, FRAGGED, () => { P.fragT = 0; }, MELT_SPEED / 2); }
+    if (P.fragT !== undefined) {
+      P.fragT += dt;
+      $("screen").style.opacity = String(Math.max(0, 1 - Math.max(0, P.fragT - FRAG_HOLD) / FRAG_FADE));
+      if (P.fragT >= FRAG_HOLD + FRAG_FADE + FRAG_BLACK) {   // the view stays black (render) and the FEED banner fades in over it
+        P.black = true; $("screen").style.opacity = "";
+        const bn = $("banner"); bn.classList.add("fadein"); bn.addEventListener("animationend", () => { bn.classList.remove("fadein"); if (document.pointerLockElement) document.exitPointerLock(); }, { once: true });   // the mouse comes back once the banner is all the way in
+        finish();
+      }
+    }
+    return;
+  }
   for (lag += dt; lag >= 1 / C.FPS - 0.004 && !P.done; lag -= 1 / C.FPS) {
     for (const ev of C.tick(P)) if (ev === "hurt") {
       P.hurt = 0.25; say("ENEMY tagged YOU", "e");
@@ -445,7 +520,15 @@ function step(dt) {
       if (g.k > was.k) say(`${m.n} fragged ENEMY`, "h");
       if (g.over && !was.over) say(g.out ? `${m.n} got out` : `${m.n} was fragged`, g.out ? "h" : "e");
     }
-    if (P.over) finish();
+    if (P.over) {
+      if (P.hp <= 0 && !reduced) {   // dying: fall, then melt (above), then finish
+        P.deathT = 0; P.viewA = P.a * 2 * Math.PI / C.TURN;
+        P.killer = enemies.filter((e) => e.state === "out").sort((a, b) => Math.hypot(a.x - P.x, a.y - P.y) - Math.hypot(b.x - P.x, b.y - P.y))[0];
+        break;
+      }
+      if (P.escaped) { startWipe(null, card([["Y O U   G O T   O U T", "b"]]), finish); break; }
+      finish();
+    }
   }
   P.jit = C.jit(P);
 }
@@ -562,6 +645,7 @@ addEventListener("keydown", (ev) => {
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
   day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
-  if (t.run) showSealed(t.run); else build();
+  if (t.run) showSealed(t.run);
+  else { build(); const lv = C.level(day); startWipe(card([["T I L T . E X E", "b"], ["", ""], [`${day}  4DUNGEON ${lv.name} WING ${WING}`, "t"]])); }
   requestAnimationFrame(loop);
 }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
