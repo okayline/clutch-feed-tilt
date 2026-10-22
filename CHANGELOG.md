@@ -4,6 +4,19 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.14.0 — "No Fog"
+**Wed Oct 21, 2026 · 4:06 PM HST**
+
+- No fog: you see all the way down a corridor, walls, floor, ceiling and enemies alike. Removed: the 9-tile sight limit and the darkness past it.
+- You start in the first room of the first wing whose middle can't see the exit, so the exit is never in sight from where you start. Removed: always starting in the first wing's first room, which could look straight down a line of doors to the exit. (About 1 day in 26 still can, when no room in the wing is clear.)
+- Enemies have 10 HP, up from 6: the chest or gun takes 5 hits, the head 3, the legs 10, and a drone's O 2. The crown still drops one at once. Removed: 6 HP, where a chest took 3 hits and a drone's O one.
+- The crown is the dead centre of the middle @: a shot within a quarter row of its middle. Removed: the crown being the whole of the head's top row.
+- A far shot goes wide, and nothing on the screen shakes to show it: an enemy on the view past 5 tiles adds 0.2 columns of swing (and under half as many rows) for every tile further, up to 10 tiles past 5, so a far shot has to be timed. Removed: every shot landing exactly on the crosshair at any range when you aren't tilting.
+- A drone fires every 50 ticks, others every 25. Removed: the drone firing as fast as the rest.
+- These change the rules (corridor.js: where you start, enemy HP, the crown, shot scatter, the drone's fire rate), so a run sealed before this replays differently as a ghost.
+
+---
+
 ## v0.13.0 — "Two Wings"
 **Wed Oct 21, 2026 · 3:50 PM HST**
 

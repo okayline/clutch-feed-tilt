@@ -171,25 +171,28 @@ test("the hitbox is the drawn figure, no spare cell; the crown is the middle 1 o
   assert.deepEqual(["-", "~", ":", "[", "]", "/", "\\"].map((p) => C.DMG[p]), [undefined, undefined, undefined, undefined, undefined, undefined, undefined], "only the O is a hit");
 });
 
-test("short, tall, drone in turn; a drone dies to one hit on its O; a short one: the leg gap misses, 3 chest shots, a double tap, a crown shot", () => {
+test("short, tall, drone in turn; a drone dies to two hits on its O; a short one: the leg gap misses, 5 chest shots, 3 head shots, a crown shot, only the dead centre of the crown cell", () => {
   assert.deepEqual(C.corridor(12345, "2026-10-21", 2).enemies.map((e) => e.kind), ["short", "tall", "drone", "short", "tall"]);
   const rows = (b, part) => { const out = []; for (let r = b.top; r < b.bot; r++) if (C.cell(b, Math.round(C.AIM), r) === part) out.push(r); return out; };
   const drones = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "drone"); return faceFirst(cor); };
   const [B, dr, drBox] = drones();
   assert.equal(dr.kind, "drone");
-  assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "kill", "dying"], "its mast misses, its O drops it");
+  assert.deepEqual([C.fire(B, drBox.top), C.fire(B, rows(drBox, "O")[0]), C.fire(B, rows(drBox, "O")[0]), dr.state], ["miss", "body", "kill", "dying"], "its mast misses, its O (6 of 10) then drops it");
   const shorts = () => { const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = "short"); return faceFirst(cor); };
   const [R, a, box] = shorts(), chest = rows(box, "#")[0];
   assert.equal(C.fire(R, box.bot - 1), "miss", "the middle column between the legs");
-  assert.deepEqual([C.fire(R, chest), C.fire(R, chest), C.fire(R, chest)], ["body", "body", "kill"]);
+  assert.deepEqual([1, 2, 3, 4, 5].map(() => C.fire(R, chest)), ["body", "body", "body", "body", "kill"], "chest 2 each, 10 HP");
   assert.equal(a.state, "dying");
   const [Q, b, bb] = shorts(), head = rows(bb, "@");
   assert.ok(head.length >= 2 && C.onCrown(bb, Math.round(C.AIM), head[0]) && !C.onCrown(bb, Math.round(C.AIM), head[1]));
-  assert.deepEqual([C.fire(Q, head[1]), C.fire(Q, chest)], ["head", "kill"], "a headshot (4) leaves it up; a chest shot (2) then drops it");
+  assert.deepEqual([1, 2, 3].map(() => C.fire(Q, head[1])), ["head", "head", "headkill"], "head 4 each: 4, 8, 12");
   assert.equal(b.state, "dying");
   const [S, c, cb] = shorts();
   assert.deepEqual([C.fire(S, cb.top), c.state], ["headkill", "dying"], "the crown drops it at once");
-  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [3, 1, 1, 1]);
+  assert.deepEqual([R.hits, R.kills, Q.heads, S.heads], [5, 1, 3, 1]);
+  // the crown is the middle half of its cell: within 0.25 of the row's middle drops it, further out is a plain head hit (4)
+  const centre = (dy) => { const [X, , xb] = shorts(); return C.fire(X, xb.top + dy); };
+  assert.deepEqual([centre(0), centre(0.25), centre(-0.25), centre(0.3), centre(-0.4), centre(0.4)], ["headkill", "headkill", "headkill", "head", "head", "head"]);
 });
 
 test("tilt: a miss adds 0.25 with no enemy on the view; with one on it, 1.5 and at least 3 (of 5)", () => {
@@ -221,4 +224,31 @@ test("replay: inputs that aren't a run are refused", () => {
   assert.equal(C.replay(cor, [[5, 3, 1]]), null, "no such input");
   assert.equal(C.replay(cor, [[5.5, 0, 1]]), null, "a tick is a whole number");
   assert.equal(C.replay(cor, "nope"), null);
+});
+
+test("a far shot goes wide, and the crosshair doesn't move: an enemy on the view further than NEAR tiles, wider the further it is", () => {
+  const cor = C.corridor(12345, "2026-10-21", 2), [R, e] = faceFirst(cor);
+  for (const row of cor.open) row.fill(true);   // an open field, so the enemy can be seen from any distance up to its edge
+  const dir = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ux, uy]) => ({ ux, uy, room: Math.min(...[ux > 0 ? e.x : ux < 0 ? cor.w - e.x : Infinity, uy > 0 ? e.y : uy < 0 ? cor.h - e.y : Infinity]) })).sort((a, b) => b.room - a.room)[0];
+  assert.ok(dir.room > C.NEAR + 4, "room for an enemy 4 tiles past NEAR");
+  e.state = "out";
+  R.a = Math.round(C.atan2(dir.uy, dir.ux) * C.TURN / (2 * Math.PI) + C.TURN) % C.TURN;   // facing along dir, with the enemy ahead
+  const at = (d) => { R.x = e.x - dir.ux * d; R.y = e.y - dir.uy * d; return Array.from({ length: 42 }, (_, t) => { R.tick = t; return C.scatter(R); }); };
+  assert.deepEqual(at(C.NEAR), Array(42).fill([0, 0]), "up to NEAR: no scatter");
+  const wide = (d) => Math.max(...at(d).map(([x]) => Math.abs(x)));
+  assert.ok(wide(C.NEAR + 4) > 0 && wide(C.NEAR + 4) <= 2 * 4 * C.SPREAD + 1e-9, "past NEAR: at most two zig-zags of (distance - NEAR) * SPREAD");
+  assert.ok(wide(C.NEAR + 4) > wide(C.NEAR + 2), "further, wider");
+  assert.equal(C.jit(R), 0, "the crosshair itself doesn't move (no tilt)");
+});
+
+test("a drone fires half as often as the others: every 50 ticks against 25, once it sees you", () => {
+  const hits = (kind) => {
+    const cor = C.corridor(12345, "2026-10-21", 2); cor.enemies.forEach((e) => e.kind = kind);
+    const [R, e] = faceFirst(cor), at = [];
+    R.hp = 99; e.fire = 1;   // about to fire
+    for (let n = 0; n < 130; n++) { const before = R.hp; C.tick(R); if (R.hp < before) at.push(R.tick); }
+    return at.slice(1).map((t, i) => t - at[i]).slice(0, 2);
+  };
+  assert.deepEqual(hits("short"), [25, 25]);
+  assert.deepEqual(hits("drone"), [50, 50]);
 });

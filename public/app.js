@@ -68,7 +68,6 @@ const ch = Array.from({ length: H }, () => new Array(W).fill(" "));
 const cl = Array.from({ length: H }, () => new Array(W).fill(""));
 const zbuf = new Float64Array(W);
 const TALL = 2;
-const SIGHT = 9;   // how far you can see, in tiles: a room and into the next, so the end of the run stays out of sight
 const GATE = 0.9;  // the exit's holo gate is this far above your eye, the floor being 0.5 below it   // a wall is twice as high as the floor-to-eye-and-back it was, so there is a ceiling above you
 const put = (x, y, c, k) => { if (x >= 0 && x < W && y >= 0 && y < H) { ch[y][x] = c; cl[y][x] = k; } };
 
@@ -101,11 +100,10 @@ function render() {
     // narrows away. A wall is TALL times as high as you see from the floor up to your eye and back down, standing on the
     // same floor as the enemies (corridor.js enemyBox), so it rises above you to the ceiling.
     h.t = H / 2 - (TALL - 0.5) * H / Math.max(0.3, d); h.b = H / 2 + 0.5 * H / Math.max(0.3, d);
-    h.far = d > SIGHT;   // too far to see: darkness
     hits.push(h);
   }
   // are columns x and x + 1 on the same stretch of wall?
-  const joined = (x) => x >= 0 && x + 1 < W && !hits[x].far && !hits[x + 1].far && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
+  const joined = (x) => x >= 0 && x + 1 < W && hits[x].line === hits[x + 1].line && Math.abs(hits[x].at - hits[x + 1].at) < 3;   // (far down a side wall, one column to the next can be over a tile apart)
   for (let x = 0; x < W; x++) {
     const { d, side, gate, locked, rdx, rdy, pd, t, b } = hits[x], top = Math.round(t), bot = Math.round(b);
     const k = pd > 14 ? "d" : pd > 7 ? "t" : "";
@@ -114,12 +112,10 @@ function render() {
     const bl = joined(x - 1) ? (hits[x - 1].b + b) / 2 : b, br = joined(x) ? (hits[x + 1].b + b) / 2 : b;
     const sideOn = (side === 0 ? Math.abs(rdx) : Math.abs(rdy)) <= 0.8;   // a side wall, running away from you
     // a corner between this column and the one to its left: the | goes on the nearer of the two, all the way up it
-    // (into darkness, past SIGHT, the | goes on the one you can see)
-    let edge = x > 0 && hits[x - 1].d < d ? x - 1 : x;
-    if (x > 0 && hits[edge].far) edge = edge === x ? x - 1 : x;
-    const corner = x > 0 && !joined(x - 1) && !hits[edge].far;
+    const edge = x > 0 && hits[x - 1].d < d ? x - 1 : x;
+    const corner = x > 0 && !joined(x - 1);
     if (corner) { const e = hits[edge]; for (let y = Math.max(0, Math.round(e.t)); y < Math.min(H, Math.round(e.b)); y++) put(edge, y, "|", e.pd > 14 ? "d" : e.pd > 7 ? "t" : ""); }
-    for (let y = Math.max(0, top); y < Math.min(H, bot) && !hits[x].far; y++) {
+    for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
       if (ch[y][x] === "|") continue;   // a corner drawn from the column to the right
       // a locked door: # all over, as the minimap marks it
       else if (locked) put(x, y, "#", k);
@@ -128,7 +124,7 @@ function render() {
     }
     // the exit, while it's shut: a holo gate a little over head height: a bright post at each side and a field of
     // flickering : ' . running down between them, as if it were falling
-    if (gate && !hits[x].far) {
+    if (gate) {
       const gt = Math.max(0, Math.round(H / 2 - GATE * H / Math.max(0.3, d))), post = !(x > 0 && hits[x - 1].gate) || !(x + 1 < W && hits[x + 1].gate);
       for (let y = gt; y < Math.min(H, bot); y++) {
         if (post) { put(x, y, "|", "b"); continue; }
@@ -140,20 +136,20 @@ function render() {
     // along, unless it slopes under 1 row in 4 columns (that would be a flat run of them); a wall facing you keeps its
     // flat edge undrawn
     // (the top edge, then the bottom one; each is a \ where it falls to the right and a / where it rises)
-    for (const [l, r] of hits[x].far ? [] : [[tl, tr], [bl, br]]) {
+    for (const [l, r] of [[tl, tr], [bl, br]]) {
       const y0 = Math.round(Math.min(l, r)), y1 = Math.round(Math.max(l, r)), c = r > l ? "\\" : "/", mid = Math.floor((l + r) / 2);
       const [ya, yb] = y1 > y0 ? [y0, y1] : sideOn && Math.abs(r - l) >= 0.25 ? [mid, mid + 1] : [0, 0];
       for (let y = ya; y < yb; y++) put(x, y, c, k);
     }
     // the floor grid: only the lines running the way you face, so nothing scrolls toward you as you walk ahead
     for (let y = Math.max(bot, H / 2 + 1); y < H; y++) {
-      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= Math.min(d, SIGHT)) continue;
+      const rd = H / (2 * (y + 0.5 - H / 2)); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
     // the ceiling: the same lines, overhead, where the walls' tops meet it
     for (let y = Math.min(top, H / 2 - 1) - 1; y >= 0; y--) {
-      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= Math.min(d, SIGHT)) continue;
+      const rd = (TALL - 0.5) * H / (H / 2 - y - 0.5); if (rd >= d) continue;
       const wv = Math.abs(E.dx) < Math.abs(E.dy) ? px + rd * rdx : py + rd * rdy, fr = wv - Math.floor(wv);
       if (fr < 0.05) put(x, y, ".", rd > 6 ? "d" : "t");
     }
@@ -167,7 +163,7 @@ function render() {
   for (const [e, b] of vis) {
     const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
-      if (zbuf[x] < ry || ry > SIGHT) continue;
+      if (zbuf[x] < ry) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
         let c = e.state === "dying" ? "%" : C.cell(b, x, y, Math.floor(P.tick / SPIN_TICKS));
         if (c === "@" && k === "h") c = "o";
