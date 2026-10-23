@@ -1,5 +1,14 @@
 # Working notes for clutch-feed-tilt
 
+## Rules for every repo
+
+- **Push only when the user says to.** Build and commit locally as asked.
+- **Ask before adding anything that wasn't asked for** (a button, a screen, a message, a page, a feature), even a small one. The owner would rather be asked than remove it later.
+- **Keep testing quick: 2-3 mins at most. Don't test for edge cases.**
+- **No new dependencies** without asking.
+- Times in changelogs are Hawaii time (HST).
+
+
 TILT.EXE (repo, Worker, D1, ledger and registry ids stay `clutch-feed-tilt`/`cft`; the player-facing name was CLUTCH FEED TILT until v0.10.1): a daily ASCII corridor shooter. One corridor per UTC day, the same for everyone; your run is labelled CLUTCH, FEED or TILT. Rules doc: the Claude Doc "CLUTCH FEED TILT: rules" (https://claude.ai/artifact/LeYcKUbq78EKJfsaYQwX4H).
 
 - **Push only when the user says to.** Once the Worker is connected to this repo, a push to `main` is a release.
