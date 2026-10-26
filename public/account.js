@@ -86,6 +86,15 @@ function paint() {
     row("   ", btn("DONE", "done"));
     line();
   }
+  // (v0.19) CARRY: every copy your account holds in any 88x31 game, newest first. The pinned one (else the newest) is the
+  // one you carry into the corridor; PIN carries another from your next run.
+  if (a.player) {
+    const on = copies.find((x) => x.pinned) || copies[0];
+    line(` CARRY  ${on ? on.name + " #" + on.copy : "nothing yet"}`.slice(0, 46), on ? "g" : "");
+    for (const [i, x] of copies.slice(0, 12).entries()) row(`   ${(x.name + " #" + x.copy).slice(0, 28).padEnd(29)}`, x === on ? "" : btn("PIN", "pin-" + i));
+    if (!copies.length) line("   No copies yet. Find one in 4Dungeon, irl-dungeon or 88x31.", "d");
+    line();
+  }
   line(` SAVE CODES (${a.codes.length})`);
   for (const c of a.codes) row(`   made ${monthDay(c.created_at)}${c.last_used_at ? ", used " + monthDay(c.last_used_at) : ""}  `, btn("FORGET", "fcode-" + c.id));
   if (!a.codes.length) line("   None yet.", "d");
@@ -111,7 +120,8 @@ function paint() {
 }
 
 const say = (t) => { msg = t; const m = $("panel").querySelector(".msg"); if (m) { m.textContent = t ? " " + t : ""; m.hidden = !t; } };
-const refresh = async () => { acct = await api("GET", "account"); onName(acct.name); };
+let copies = [];
+const refresh = async () => { acct = await api("GET", "account"); onName(acct.name); copies = acct.player ? (await api("GET", "copies")).copies : []; };
 
 async function act(a) {
   if (a === "close") return close();
@@ -126,6 +136,7 @@ async function act(a) {
       catch { msg = "Couldn't copy. Select the code and copy it by hand."; }
     }
     else if (a === "dlcode") return downloadCode();
+    else if (a.startsWith("pin-")) { const x = copies[Number(a.slice(4))]; await api("POST", "pin", { itemId: x.itemId, copy: x.copy }); msg = "Pinned. It's carried from your next run."; await refresh(); }
     else if (a.startsWith("fcode-") || a.startsWith("fpk-")) {
       await api("POST", a.startsWith("fcode-") ? "codes" : "passkey", { action: "remove", id: Number(a.split("-")[1]) });
       msg = "Forgotten."; await refresh();

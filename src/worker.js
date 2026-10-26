@@ -59,6 +59,8 @@ const ROUTES = {
   "POST /api/load": loadCode,
   "POST /api/passkey": passkey,
   "POST /api/logout": logout,
+  "GET /api/copies": copies,
+  "POST /api/pin": pinCopy,
 };
 
 // ---------- helpers ----------
@@ -425,4 +427,22 @@ async function logout(req, env) {
   const hp = home && (await env.DB.prepare("SELECT id FROM players WHERE token_hash = ? AND id != ?").bind(await sha256(home), player.id).first());
   const back = hp && !(await accountFor(env, hp));
   return withCookie(json({ ok: true }), [back ? setCookie(home) : clearCookie(COOKIE), clearCookie(HOME)]);
+}
+
+// The picker (account panel): every copy your account holds in any game, newest first, and pinning one of them to carry.
+//   GET  /api/copies              { copies: [{ itemId, copy, name, game, pinned }] } (up to 50)
+//   POST /api/pin {itemId, copy}  pin it: every game carries it from your next run
+async function copies(req, env) {
+  const player = await findPlayer(req, env);
+  if (!player || !env.REGISTRY || !env.REGISTRY.heldAcross) return json({ copies: [] });
+  const list = await env.REGISTRY.heldAcross(GAME, player.id, 50);
+  return json({ copies: list.map((c) => ({ itemId: c.itemId, copy: c.copy, name: c.item.name, game: c.game, pinned: c.pinned })) });
+}
+async function pinCopy(req, env) {
+  const player = await findPlayer(req, env);
+  if (!player) throw new Oops("Make a save code or passkey first.", 401);
+  const b = await body(req);
+  const r = await env.REGISTRY.pin({ game: GAME, playerId: player.id, itemId: Number(b.itemId), copy: Number(b.copy) });
+  if (r && r.error) throw new Oops(r.error);
+  return json({ ok: true });
 }
