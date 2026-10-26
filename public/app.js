@@ -635,7 +635,7 @@ addEventListener("blur", () => { held = 0; stick = 0; sendKeys(); });
 $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 
 $("version").textContent = "v" + VERSION;
-setupAccount((name) => { myName = name; });
+setupAccount((name) => { myName = name; }, () => loadToday());   // (v0.19.1) a login or logout loads that player's day
 setupLedger();
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
 $("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); else if (s.dataset.k === "ammo" && canPlay() && C.reload(P)) say("RELOADING", "g"); });
@@ -651,10 +651,15 @@ addEventListener("keydown", (ev) => {
 });
 
 // ---- today's corridor from the server -----------------------------------------------------------------------
+// Also after a login or logout (v0.19.1): the new player's sealed run, or a fresh corridor if they haven't run today.
+let looping = false;
+function loadToday() {
+  return fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
+    day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || []; CARRY = t.carry || null;
+    if (t.run) showSealed(t.run);
+    else { build(); startWipe(card([])); }   // off a black screen
+    if (!looping) { looping = true; requestAnimationFrame(loop); }
+  }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
+}
 frame("LOADING TODAY'S CORRIDOR...");
-fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
-  day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || []; CARRY = t.carry || null;
-  if (t.run) showSealed(t.run);
-  else { build(); startWipe(card([])); }   // off a black screen
-  requestAnimationFrame(loop);
-}).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
+loadToday();

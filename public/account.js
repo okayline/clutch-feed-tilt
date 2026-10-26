@@ -12,6 +12,7 @@ async function api(method, path, data) {
   return d;
 }
 
+let onPlayer = () => {};
 let open = false, acct = null, newCode = "", msg = "", copied = false, busy = false, onName = () => {};
 
 // The browser speaks WebAuthn in ArrayBuffers; the server speaks base64url.
@@ -35,7 +36,7 @@ async function addPasskey() {
       id: cred.id, response: { clientDataJSON: toB64(cred.response.clientDataJSON), attestationObject: toB64(cred.response.attestationObject) },
     } });
   } catch (e) { throw pkOops(e); }
-  acct = await api("GET", "account"); onName(acct.name);
+  await refresh();   // (v0.19.1) the account and the CARRY list
   // passkeys only work on 88x31.app addresses: a save code is the backup if that ever changes
   msg = acct.codes.length ? "Passkey added." : "Passkey added. Make a save code too, as a backup.";
 }
@@ -53,8 +54,9 @@ async function loginPasskey() {
 }
 
 async function loggedIn(name) {
-  acct = await api("GET", "account"); onName(acct.name);
+  await refresh();   // (v0.19.1) the account and the CARRY list
   msg = `Logged in as ${name || "your player"}.`;
+  onPlayer();
 }
 
 // ---------- the panel ----------
@@ -146,7 +148,7 @@ async function act(a) {
       if (!c) return say("Type your save code first.");
       const d = await api("POST", "load", { code: c }); await loggedIn(d.name);
     }
-    else if (a === "out") { await api("POST", "logout", {}); msg = "Signed out."; await refresh(); }
+    else if (a === "out") { await api("POST", "logout", {}); msg = "Signed out."; await refresh(); onPlayer(); }
     else if (a === "pk") { say("Waiting for your fingerprint, face or PIN..."); await addPasskey(); }
     else if (a === "pklogin") { say("Waiting for your passkey..."); await loginPasskey(); }
     paint();
@@ -191,8 +193,9 @@ export async function openPlayer() {
 }
 
 // Wire the panel. `nameChanged(name)` is told whenever the player's name may have changed.
-export function setupAccount(nameChanged) {
-  onName = nameChanged;
+// `playerChanged` (v0.19.1) is called after logging in or out: the page loads that player's day again.
+export function setupAccount(nameChanged, playerChanged = () => {}) {
+  onName = nameChanged; onPlayer = playerChanged;
   $("panel").addEventListener("click", (ev) => { const s = ev.target.closest("[data-pact]"); if (s) act(s.dataset.pact); });
   addEventListener("keydown", (ev) => { if (open && ev.key === "Escape") { ev.preventDefault(); close(); } });
 }

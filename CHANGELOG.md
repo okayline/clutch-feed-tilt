@@ -4,6 +4,15 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.19.1 — "After Login"
+**Mon Oct 26, 2026 · 12:53 AM HST**
+
+- Logging in with a save code or passkey, or adding a passkey, now fills in the CARRY list straight away.
+- Logging in or out now loads that player's day. If they haven't run today, a fresh corridor opens, so a run made logged out no longer blocks your account's run.
+- Removed: the empty CARRY list ("nothing yet") right after a login, which only filled in once you reopened USER, and the logged-out player's finished run staying on screen after a login.
+
+---
+
 ## v0.19.0 — "Carry"
 **Mon Oct 26, 2026 · 12:16 AM HST**
 
