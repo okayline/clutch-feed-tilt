@@ -101,7 +101,7 @@ const dayRec = (day, wing = 2) => { const L = level(day); return JSON.stringify(
 test("the day's seed: the first 4 bytes of the hash of the day's ledger entry; /api/today gives the UTC day, its seed, your name and your run", async () => {
   const { env, call } = setup();
   const t = await call("ann", "GET", "/api/today"), dayHash = sha("0".repeat(64) + "|" + dayRec("2027-01-01"));
-  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), wing: 2, name: null, run: null, ghosts: [] });
+  assert.deepEqual(t, { status: 200, day: "2027-01-01", seed: parseInt(dayHash.slice(0, 8), 16), wing: 2, name: null, run: null, ghosts: [], carry: null });
   assert.equal((await call("bo", "GET", "/api/today")).seed, t.seed, "the same seed for everyone");
   assert.deepEqual(env.DB.raw.prepare("SELECT kind, record, hash FROM ledger").all().map((r) => ({ ...r })),
     [{ kind: "day", record: dayRec("2027-01-01"), hash: dayHash }], "one day entry, sealed by the first request");
@@ -240,4 +240,25 @@ test("how far the floor is open: the furthest wing 4Dungeon's players opened thi
   // a day with no board to ask (or no tallies): the run's 2 wings
   const other = setup(); delete other.env.DUNGEON;
   assert.equal((await other.call("cy", "GET", "/api/today")).wing, 2);
+});
+
+test("the carried copy: your account's pinned copy is shown, sealed with the run, marked by a CLUTCH, and a blessed one makes your ghost gold", async () => {
+  const { env, call } = setup();
+  const day = "2027-01-01", seed = (await call("x", "GET", "/api/today")).seed;
+  const live = playBot(C.corridor(seed, day, 2)), inputs = live.log.map((s) => s.slice(0, 3));
+  assert.equal(C.label(live), "CLUTCH");
+  // the registry (dungeon-items, tested there): ann carries item 4 copy 2, blessed by the Moon; bo carries nothing
+  const marked = [];
+  Object.assign(env.REGISTRY, {
+    async pinned(game, playerId) { return playerId === 1 ? { itemId: 4, copy: 2, game: "4dungeon", pinned: true, item: { name: "a lamp" }, marks: [{ kind: "moon", value: "blessed" }] } : null; },
+    async markCarried(m) { marked.push(m); return { ok: true, n: 2, created: true }; },
+  });
+  await call("ann", "POST", "/api/codes", { action: "new" });
+  assert.deepEqual((await call("ann", "GET", "/api/today")).carry, { name: "a lamp", copy: 2, blessed: 1 });
+  assert.equal((await call("ann", "POST", "/api/run", { day, inputs })).status, 200);
+  assert.deepEqual(JSON.parse(env.DB.raw.prepare("SELECT record FROM ledger WHERE kind = 'run'").get().record).carry, { item: 4, copy: 2, blessed: 1 });
+  assert.deepEqual(marked, [{ itemId: 4, copy: 2, by: { game: "clutch-feed-tilt", playerId: 1 }, kind: "deed", value: "survived_clutch", key: "run:2027-01-01:1" }]);
+  assert.equal((await call("ann", "GET", "/api/today")).carry, null, "nothing carried once today's run is sealed");
+  const t = await call("bo", "GET", "/api/today");
+  assert.deepEqual([t.carry, t.ghosts[0].blessed], [null, 1], "bo carries nothing; ann's ghost is gold");
 });

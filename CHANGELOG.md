@@ -4,6 +4,16 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.19.0 — "Carry"
+**Mon Oct 26, 2026 · 12:16 AM HST**
+
+- You carry one copy into the corridor: your account's pinned copy from any game (a 4Dungeon find, an 88x31 button, a Dawn Baton relic), or your newest copy when nothing is pinned. It shows under SQUAD as CARRY, gold if the Moon blessed it. It is read when the page loads and again when the run is sealed, and sealed with the run. Needs a save code or passkey (a player with no account carries nothing). Removed: the blank row above the minimap.
+- A CLUTCH run marks the carried copy "survived_clutch" in the shared registry (one mark per run). Removed: runs leaving no trace on the copies players hold.
+- A ghost who carried a Moon-blessed copy is drawn in gold, on the view and under SQUAD. Removed: every ghost always in ghost blue.
+- Needs dungeon-items with the pinned copy (its migration 007) live first.
+
+---
+
 ## v0.18.3 — "Dead End"
 **Wed Oct 21, 2026 · 7:46 PM HST**
 

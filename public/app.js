@@ -34,7 +34,7 @@ const GUN = [
 
 const reloadFrame = () => !P || !(P.reload > 0) ? 0 : P.reload > C.RELOAD_TICKS / 2 ? 1 : 2;
 
-let day = "", SEED = 0, WING = 0, myName = null, GHOSTS = [];
+let day = "", SEED = 0, WING = 0, myName = null, GHOSTS = [], CARRY = null;
 let cor, enemies, squad, feed, P, lag = 0;
 
 // ---- a run --------------------------------------------------------------------------------------------------
@@ -49,7 +49,7 @@ function build() {
   squad = GHOSTS.map((g) => {
     const track = [];
     const R = C.ghostRun(cor, g, (r) => track.push({ x: r.x, y: r.y, hp: r.hp, k: r.kills, over: r.over, out: r.escaped }));
-    return R && track.length ? { n: g.name, track } : null;
+    return R && track.length ? { n: g.name, track, gold: !!g.blessed } : null;   // gold: they carried a Moon-blessed copy (v0.19)
   }).filter(Boolean);
   feed = [];
 }
@@ -209,7 +209,8 @@ function render() {
   // enemies, far to near
   // the same boxes and shapes the engine checks a shot against (corridor.js enemyBox, cell)
   // and ghost teammates, drawn in the ghost colour with an o for a head
-  const ghosts = squad.map((m) => ghostAt(m)).filter((g) => !g.over).map((g) => ({ x: g.x, y: g.y, state: "ghost", kind: "ghost" }));
+  // (gold, not ghost blue, when they carried a Moon-blessed copy)
+  const ghosts = squad.map((m) => [m, ghostAt(m)]).filter(([, g]) => !g.over).map(([m, g]) => ({ x: g.x, y: g.y, state: "ghost", kind: "ghost", gold: m.gold }));
   // a downed enemy is wiped out digitally over WIPE seconds: drawn at full size (not the engine's shrinking box), its rows
   // erased from the top down behind a band of glitch, the rest glitching more and more. Drawing only.
   const wipeOf = (e) => e.diedAt === undefined ? -1 : (P.tick - e.diedAt) / (WIPE * C.FPS);
@@ -217,7 +218,7 @@ function render() {
     .map((e) => [e, wipeOf(e) >= 1 ? null : C.enemyBox(E, wipeOf(e) >= 0 ? { ...e, state: "out" } : e)]).filter(([, b]) => b).sort((a, b) => b[1].ry - a[1].ry);
   for (const [e, b0] of vis) {
     const lift = Math.round((0.5 - EH) * H / b0["ry"]), b = lift ? { ...b0, top: b0.top - lift, bot: b0.bot - lift } : b0;   // a lower eye sees them higher
-    const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? "h" : "e";
+    const { sxc, ry, l, rr, top, bot } = b, k = e.state === "ghost" ? (e.gold ? "g" : "h") : "e";
     for (let x = Math.max(0, l); x < Math.min(W, rr); x++) {
       if (zbuf[x] < ry) continue;
       for (let y = Math.max(0, top); y < Math.min(H, bot); y++) {
@@ -229,7 +230,7 @@ function render() {
           else if (f < w + 0.18) { c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; kk = "g"; }
           else if (noise(x, y, t) < 0.3 + 0.6 * w) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)];
         }
-        else if (c === "@" && k === "h") c = "o";
+        else if (c === "@" && e.state === "ghost") c = "o";
         else if (c && k === "e") { if (noise(x, y, t) < GLITCH[b.kind]) c = GLITCH_GLYPHS[Math.floor(noise(y, x, t + 7) * GLITCH_GLYPHS.length)]; }
         if (c) put(x, y, c, kk);
       }
@@ -323,11 +324,12 @@ function frame(message) {
       const m = squad[i];
       if (!m) return i === 0 && !squad.length ? [[" NO GHOSTS YET TODAY", "d"]] : [[""]];
       const g = ghostAt(m), dead = g.over && !g.out;
-      return [[" " + pad(m.n, 10), dead ? "d" : "h"], [" ghost", "d"], [" ", ""],
+      return [[" " + pad(m.n, 10), dead ? "d" : m.gold ? "g" : "h"], [" ghost", "d"], [" ", ""],
               [dead ? "DEAD " : g.out ? "OUT  " : "[" + "#".repeat(g.hp) + " ".repeat(C.HP - g.hp) + "]", dead ? "e" : "t"], ["  " + g.k, dead ? "d" : "t"]];
     }),
     [[rule, "d"]],
-    [[""]],
+    // the copy you carry in (your account's pinned copy, /api/today carry), gold if the Moon blessed it
+    CARRY ? [[" CARRY ", "d"], [CARRY.name + " #" + CARRY.copy, CARRY.blessed ? "g" : "t"]] : [[""]],
     ...minimap().map((line) => line.split("@").flatMap((part, i) => i ? [["@", "b"], [part, "t"]] : [[" " + part, "t"]])),
     [[rule, "d"]],
     [[` SHOTS ${String(P.shots).padStart(2, "0")}  HITS ${String(P.hits).padStart(2, "0")}  ACC ${String(acc).padStart(3)}%`, "t"]],
@@ -651,7 +653,7 @@ addEventListener("keydown", (ev) => {
 // ---- today's corridor from the server -----------------------------------------------------------------------
 frame("LOADING TODAY'S CORRIDOR...");
 fetch("/api/today").then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).then((t) => {
-  day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || [];
+  day = t.day; SEED = t.seed; WING = t.wing; myName = t.name; GHOSTS = t.ghosts || []; CARRY = t.carry || null;
   if (t.run) showSealed(t.run);
   else { build(); startWipe(card([])); }   // off a black screen
   requestAnimationFrame(loop);

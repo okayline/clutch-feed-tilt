@@ -1,10 +1,11 @@
 // TILT.EXE Worker (repo, Worker and game id still clutch-feed-tilt). The page and its files are static assets; /api/* comes here first.
 //
-//   GET  /api/today                    { day, seed, wing, name, run, ghosts }: today's date in UTC (from the server's clock,
+//   GET  /api/today                    { day, seed, wing, name, run, ghosts, carry }: today's date in UTC (from the server's clock,
 //                                      so a wrong phone clock can't pick another day), its seed and how far its floor is
 //                                      open (corridor.js corridor), your name if you have a player,
 //                                      your run today if you've sealed one, and up to 3 other players' sealed runs today
-//                                      (name, inputs, and the HP, shots and hits it was sealed with) for your ghost teammates
+//                                      (name, inputs, and the HP, shots and hits it was sealed with) for your ghost teammates,
+//                                      and the copy you carry in (your account's pinned copy, see carried()) until your run is sealed
 //   POST /api/run {day, inputs}        seal today's run on the ledger (one per player per day): the server plays it
 //                                      again from its inputs, [[tick, kind, value], ...] (corridor.js), and seals what it got
 //   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
@@ -170,8 +171,30 @@ async function today(req, env) {
   const day = utcDay();
   const player = await findPlayer(req, env);
   const { seed, wing } = await daySeed(env, day);
-  return json({ day, seed, wing, name: player ? player.name : null, run: player ? await runOf(env, player.id, day) : null,
-                ghosts: await ghostsOf(env, day, player ? player.id : 0) });
+  const run = player ? await runOf(env, player.id, day) : null;
+  const c = player && !run ? await carried(env, player.id) : null;
+  return json({ day, seed, wing, name: player ? player.name : null, run, ghosts: await ghostsOf(env, day, player ? player.id : 0),
+                carry: c && { name: c.item.name, copy: c.copy, blessed: c.blessed } });
+}
+
+// (v0.19) The copy you carry into the corridor: your account's pinned copy from any game (dungeon-items registry.js
+// pinned: the pin, else your newest copy), read once when the page loads and once more when the run is sealed, so the
+// sealed copy is the one you really hold. A Moon-blessed copy (a 4Dungeon mark) makes your ghost gold for other players.
+// A registry that's away, or no copy, carries nothing.
+async function carried(env, playerId) {
+  try {
+    const c = env.REGISTRY && env.REGISTRY.pinned ? await env.REGISTRY.pinned(GAME, playerId) : null;
+    return c && c.itemId ? { ...c, blessed: c.marks.some((m) => m.kind === "moon" && m.value === "blessed") ? 1 : 0 } : null;
+  } catch (e) { console.error(e); return null; }
+}
+
+// A CLUTCH run marks the carried copy (dungeon-items markCarried: a deed mark made in this game, keyed by the day and player
+// (one run each), so a retry makes no second mark). Like the checkpoint, a registry that's away never stops a run.
+async function markClutch(env, playerId, c, day) {
+  try {
+    const r = await env.REGISTRY.markCarried({ itemId: c.itemId, copy: c.copy, by: { game: GAME, playerId }, kind: "deed", value: "survived_clutch", key: "run:" + day + ":" + playerId });
+    if (r && r.error) console.error("The registry refused the mark: " + r.error);
+  } catch (e) { console.error(e); }
 }
 
 // Up to GHOSTS other players' sealed runs that day, newest first: their name and inputs, for the page to play beside you.
@@ -183,7 +206,7 @@ async function ghostsOf(env, day, playerId) {
     `SELECT p.name, l.record FROM runs r JOIN players p ON p.id = r.player_id JOIN ledger l ON l.kind = 'run' AND l.run_id = r.id
      WHERE r.day = ? AND r.player_id != ? ORDER BY r.id DESC LIMIT ?`).bind(day, playerId, GHOSTS).all();
   return results.map((g) => ({ name: g.name, ...JSON.parse(g.record) })).filter((g) => g.inputs)
-    .map((g) => ({ name: g.name, inputs: g.inputs.map((s) => s.slice(0, 3)), hp: g.hp, shots: g.shots, hits: g.hits }));
+    .map((g) => ({ name: g.name, inputs: g.inputs.map((s) => s.slice(0, 3)), hp: g.hp, shots: g.shots, hits: g.hits, blessed: g.carry ? g.carry.blessed : 0 }));
 }
 
 // ---------- runs and the ledger ----------
@@ -208,9 +231,10 @@ async function saveRun(req, env) {
   const { hp, shots, hits, log } = R;
   const { player, cookie } = await needPlayer(req, env);
   const label = C.label(R);
-  const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, inputs: log });
   const done = () => runOf(env, player.id, day);
   if (await done()) throw new Oops("You've already sealed a run today. A new corridor opens at midnight UTC.", 409);
+  const c = await carried(env, player.id);
+  const record = JSON.stringify({ day, player: player.id, hp, shots, hits, label, inputs: log, ...(c ? { carry: { item: c.itemId, copy: c.copy, blessed: c.blessed } } : {}) });
   for (let i = 0; i < 3; i++) {
     const t = now();
     try {
@@ -220,6 +244,7 @@ async function saveRun(req, env) {
         await chainInsert(env.DB, await head(env.DB), { day, playerId: player.id, record, t }),
       ]);
       await checkpoint(env, { day, label, hp, hits, shots });
+      if (c && label === "CLUTCH") await markClutch(env, player.id, c, day);
       return withCookie(json({ run: await done() }), cookie);
     } catch (e) {
       if (!isUnique(e)) throw e;
