@@ -1,8 +1,6 @@
 // The page: draws the frame and the view, runs the fight, and names the run. The rules are in engine/corridor.js.
 import * as C from "./engine/corridor.js";
 import FLOOR from "./engine/floor.js";
-import { VERSION } from "./engine/version.js";
-import { setupAccount, openPlayer, closePlayer, isOpen as userOpen } from "./account.js";
 import { setupLedger, openLedger, closeLedger, isOpen as ledgerOpen } from "./ledger.js";
 
 const W = C.W, H = C.H;              // the view window at half-size characters: 47 x 17 cells of the frame, doubled
@@ -337,15 +335,14 @@ function frame(message) {
      // on a phone the ammo is the reload button (R on a keyboard)
      [P.reload > 0 ? "RELOAD" : touch ? `[${P.ammo}/${C.MAG}]` : P.ammo + "/" + C.MAG, P.reload > 0 ? "e" : P.ammo <= 3 ? "g" : touch ? "btn" : "t", touch && !P.reload ? "ammo" : ""]],
   ];
-  const over = userOpen() || ledgerOpen();   // a panel covers the 3D view and the run waits
-  const status = (userOpen() ? [[" USER: SAVE CODES AND PASSKEYS. THE RUN WAITS.", "t"]]
-    : ledgerOpen() ? [[" LEDGER: EVERY SEALED DAY AND RUN. THE RUN WAITS.", "t"]]
+  const over = ledgerOpen();   // a panel covers the 3D view and the run waits
+  const status = (ledgerOpen() ? [[" LEDGER: EVERY SEALED DAY AND RUN. THE RUN WAITS.", "t"]]
     : P.done ? [[" RUN OVER. ", "b"], [P.seal || "", "t"]]
     : [[" TARGETS LEFT " + P.left, "e"], P.shut ? ["   CLEAR THE EXIT ROOM", "t"] : ["   THE EXIT IS OPEN", "g"],
        [touch ? "   STICK + DRAG" : locked() || !lockWorks ? "   WASD + MOUSE" : "   CLICK THE VIEW", "d"]]);
   const used = status.reduce((n, [t]) => n + t.length, 0);
   const again = P.done && !over ? [["[R]UN IT BACK", "btn", "r"], ["  ", ""]] : [];
-  const buttons = over ? [["[ESC] CLOSE", "btn", "esc"]] : [["[L]EDGER", "btn", "l"], ["  ", ""], ["[U]SER", "btn", "u"]];
+  const buttons = over ? [["[ESC] CLOSE", "btn", "esc"]] : [["[L]EDGER", "btn", "l"]];
   const right = again.reduce((n, [t]) => n + t.length, 0) + buttons.reduce((n, [t]) => n + t.length, 0) + 1;
   status.push([" ".repeat(Math.max(1, FW - 2 - used - right)), ""], ...again, ...buttons, [" ", ""]);
   const L = [top, "|" + head + "|", mid];
@@ -548,7 +545,7 @@ function loop(ts) {
   requestAnimationFrame(loop);
   if (last && ts - last < 1000 / C.FPS - 2) return;
   const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0); last = ts;
-  if (!userOpen() && !ledgerOpen()) step(dt);
+  if (!ledgerOpen()) step(dt);
   render(); frame();
 }
 
@@ -563,7 +560,7 @@ const KEYS = { w: 1, s: 2, a: 4, d: 8 };
 const TURN_PX = 1, TURN_TOUCH = 4, AIMY_PX = 0.03, AIMY_TOUCH = 0.1;   // turn units, and crosshair rows, per pixel
 let held = 0, stick = 0, turnLeft = 0, touch = false, lockWorks = true;
 const locked = () => document.pointerLockElement === view;
-const canPlay = () => P && !P.done && !userOpen() && !ledgerOpen();
+const canPlay = () => P && !P.done && !ledgerOpen();
 const sendKeys = () => { if (P) C.press(P, canPlay() ? held | stick : 0); };
 function look(dx, dy, perPx, perRow) {
   if (!canPlay()) return;
@@ -634,19 +631,16 @@ addEventListener("blur", () => { held = 0; stick = 0; sendKeys(); });
 // a click on a message box closes it (and isn't a shot)
 $("banner").addEventListener("pointerdown", (ev) => { ev.preventDefault(); $("banner").hidden = true; bannerT = 0; });
 
-$("version").textContent = "v" + VERSION;
-setupAccount((name) => { myName = name; }, () => loadToday());   // (v0.19.1) a login or logout loads that player's day
 setupLedger();
 // pointerdown, not click: the frame is redrawn 15 times a second, so the span pressed may be gone by the release
-$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "u") openPlayer(); else if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") { closePlayer(); closeLedger(); } else if (s.dataset.k === "r" && P.done) runItBack(); else if (s.dataset.k === "ammo" && canPlay() && C.reload(P)) say("RELOADING", "g"); });
+$("frame").addEventListener("pointerdown", (ev) => { const s = ev.target.closest("[data-k]"); if (!s || !P) return; if (s.dataset.k === "l") openLedger(); else if (s.dataset.k === "esc") closeLedger(); else if (s.dataset.k === "r" && P.done) runItBack(); else if (s.dataset.k === "ammo" && canPlay() && C.reload(P)) say("RELOADING", "g"); });
 addEventListener("keydown", (ev) => {
-  if (userOpen() || ledgerOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+  if (ledgerOpen() || !P || ev.metaKey || ev.ctrlKey || ev.altKey) return;
   const b = KEYS[ev.key.toLowerCase()];
   if (b) { ev.preventDefault(); held |= b; sendKeys(); return; }
   // a panel covers the view: let the mouse go and stop walking
   const panel = () => { if (locked()) document.exitPointerLock(); held = 0; sendKeys(); };
   if (ev.key === "l" || ev.key === "L") { ev.preventDefault(); openLedger(); panel(); }
-  else if (ev.key === "u" || ev.key === "U") { ev.preventDefault(); openPlayer(); panel(); }
   else if (ev.key === "r" || ev.key === "R") { ev.preventDefault(); if (P.done) runItBack(); else if (C.reload(P)) say("RELOADING", "g"); }
 });
 

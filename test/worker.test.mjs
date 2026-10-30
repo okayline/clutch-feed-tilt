@@ -270,7 +270,6 @@ test("the CARRY picker: lists the account's copies and pins one", async () => {
     async pin(p) { pins.push(p); return { ok: true }; },
   });
   await call("ann", "POST", "/api/codes", { action: "new" });
-  assert.deepEqual((await call("ann", "GET", "/api/copies")).copies, [{ itemId: 4, copy: 2, name: "a lamp", game: "4dungeon", pinned: false }]);
   assert.equal((await call("ann", "POST", "/api/pin", { itemId: 4, copy: 2 })).status, 200);
   assert.deepEqual(pins, [{ game: "clutch-feed-tilt", playerId: 1, itemId: 4, copy: 2 }]);
 });

@@ -4,6 +4,12 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.20.0 — "Footer"
+**Thu Oct 29, 2026**
+
+- **The shared footer** from dungeon-items ("© ~*~88x31~*~ cLuB, year · ≡ v0.20.0"), the same line every 88x31 game shows. Its ≡ opens the carry window: save codes, passkeys, logging in and out, and your copies with Pin. Removed: the version line under the screen.
+- **No USER page.** Removed: [U]SER and the U key, the USER panel (save codes, passkeys, log in, name reroll). Everything about logging in is in the ≡ window now.
+
 ## v0.19.1 — "After Login"
 **Mon Oct 26, 2026 · 12:53 AM HST**
 

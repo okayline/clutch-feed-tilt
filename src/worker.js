@@ -59,7 +59,7 @@ const ROUTES = {
   "POST /api/load": loadCode,
   "POST /api/passkey": passkey,
   "POST /api/logout": logout,
-  "GET /api/copies": copies,
+  "GET /api/carry": carryPage,
   "POST /api/pin": pinCopy,
 };
 
@@ -429,14 +429,19 @@ async function logout(req, env) {
   return withCookie(json({ ok: true }), [back ? setCookie(home) : clearCookie(COOKIE), clearCookie(HOME)]);
 }
 
-// The picker (account panel): every copy your account holds in any game, newest first, and pinning one of them to carry.
-//   GET  /api/copies              { copies: [{ itemId, copy, name, game, pinned }] } (up to 50)
+// The carry window (the footer's ≡): the registry's own page of every copy your account holds in any game, with the shared
+// save codes and passkeys and logging in and out (the routes above), in this game's frame (dungeon-items carry-window.js).
+// Its buttons pin through POST /api/pin. Same as scoundrel.exe's.
+//   GET  /api/carry[?embed=1]     the window, as a page
 //   POST /api/pin {itemId, copy}  pin it: every game carries it from your next run
-async function copies(req, env) {
+async function carryPage(req, env, url) {
   const player = await findPlayer(req, env);
-  if (!player || !env.REGISTRY || !env.REGISTRY.heldAcross) return json({ copies: [] });
-  const list = await env.REGISTRY.heldAcross(GAME, player.id, 50);
-  return json({ copies: list.map((c) => ({ itemId: c.itemId, copy: c.copy, name: c.item.name, game: c.game, pinned: c.pinned })) });
+  if (!env.REGISTRY || !env.REGISTRY.carryWindow) throw new Oops("The registry is unavailable right now. Try again in a moment.", 503);
+  const id = player ? await accountFor(env, player) : null;
+  const ways = { player: !!player, ...(id ? ok(await ACC(env).info(id)) : { codes: [], passkeys: [] }) };
+  const html = await env.REGISTRY.carryWindow({ game: GAME, playerId: player ? player.id : 0, pinUrl: "/api/pin", back: "/", ways, embed: url.searchParams.get("embed") === "1",
+    frame: { title: "TILT.EXE   CARRY", paper: "#07090a", ink: "#e4e4df", edge: "#8f8f8a", accent: "#e3b341", font: '"VT323", ui-monospace, monospace' } });
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
 }
 async function pinCopy(req, env) {
   const player = await findPlayer(req, env);

@@ -34,7 +34,6 @@
     body { padding-left: 4px; padding-right: 4px; }
     .game { font-size: calc((100vw - 8px) / 32.5); }
   }
-  .ver { color: var(--dim); text-align: right; padding-right: 1ch; font-size: .8em; margin-top: .3em; }
   .view {
     position: absolute; left: 1ch; top: 3.15em; width: 47ch; height: 17.85em;
     background: var(--bg); overflow: hidden; cursor: none; touch-action: none;
@@ -55,25 +54,23 @@
   .banner pre { background: var(--bg); padding: .3em 0; text-align: left; }
   .d { color: var(--dim); } .t { color: var(--trail); } .b { color: var(--bright); }
   .e { color: var(--enemy); } .g { color: var(--gold); } .h { color: var(--ghost); }
-  /* USER: a panel inside the 3D view window, like 4Dungeon's (daily-dungeon index.html .foundbox.inframe[data-mode="pass"]) */
+  /* the LEDGER panel, inside the 3D view window */
   .panel { position: absolute; left: 1ch; top: 3.15em; width: 47ch; height: 17.85em; background: var(--bg); box-sizing: border-box;
     outline: 1px solid var(--trail); overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
   .panel[hidden] { display: none; }
   .panel pre { white-space: pre-wrap; overflow-wrap: anywhere; }
   .panel .top { position: sticky; top: 0; background: var(--bg); }
-  .panel .code { -webkit-user-select: text; user-select: text; }
   .btn { cursor: pointer; color: var(--bright); display: inline-block; }
   .btn:hover { background: var(--fg); color: var(--bg); }
-  .codebox { background: var(--bg); color: var(--fg); border: 1px solid var(--trail); font: inherit; width: 29ch; max-width: 100%; padding: 0 4px; text-transform: uppercase; }
 </style>
 </head>
 <body>
 <div class="game" id="game">
   <pre id="frame"></pre>
-  <div class="ver" id="version"></div>
+  <!-- the footer every game shows (dungeon-items src/footer.js): "© ~*~88x31~*~ cLuB, year · ≡ version"; ≡ pops up the save codes / passkeys / carry window (/api/carry) -->
+  <script src="https://dungeon-items.ddddungeon.workers.dev/footer.js" data-version="v0.20.0"></script>
   <div class="view" id="view" tabindex="-1" aria-label="Click to capture the mouse, then click to shoot. On a phone: drag on the left to walk, drag on the right to turn, tap to shoot"><pre id="screen"></pre></div>
   <div class="banner" id="banner" hidden><pre id="bannerText"></pre></div>
-  <div class="panel" id="panel" hidden><pre></pre></div>
   <div class="panel" id="ledgerPanel" hidden><pre></pre></div>
 </div>
 <script type="module" src="app.js"></script>
