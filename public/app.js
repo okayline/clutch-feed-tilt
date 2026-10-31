@@ -653,7 +653,9 @@ function loadToday() {
     if (t.run) showSealed(t.run);
     else { build(); startWipe(card([])); }   // off a black screen
     if (!looping) { looping = true; requestAnimationFrame(loop); }
-  }).catch(() => frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."));
+    footerOn();
+  }).catch(() => { frame("CAN'T REACH THE SERVER. RELOAD TO TRY AGAIN."); footerOn(); });
 }
+function footerOn() { document.getElementById("ddfoot").hidden = false; }   // (v0.20.1) the footer shows only once the game has drawn, so it is never alone mid-screen
 frame("LOADING TODAY'S CORRIDOR...");
 loadToday();

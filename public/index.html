@@ -67,8 +67,9 @@
 <body>
 <div class="game" id="game">
   <pre id="frame"></pre>
-  <!-- the footer every game shows (dungeon-items src/footer.js): "© ~*~88x31~*~ cLuB, year · ≡ version"; ≡ pops up the save codes / passkeys / carry window (/api/carry) -->
-  <script src="https://dungeon-items.ddddungeon.workers.dev/footer.js" data-version="v0.20.0"></script>
+  <!-- the footer every game shows (dungeon-items src/footer.js): "🄯 ~*~88x31~*~ · § ≡ version", drawn into this spot; shown once the game has drawn -->
+  <div id="ddfoot" hidden></div>
+  <script src="https://dungeon-items.ddddungeon.workers.dev/footer.js" data-version="v0.20.1"></script>
   <div class="view" id="view" tabindex="-1" aria-label="Click to capture the mouse, then click to shoot. On a phone: drag on the left to walk, drag on the right to turn, tap to shoot"><pre id="screen"></pre></div>
   <div class="banner" id="banner" hidden><pre id="bannerText"></pre></div>
   <div class="panel" id="ledgerPanel" hidden><pre></pre></div>
