@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.20.5 — "White Icon"
+**Sat Oct 31, 2026 · 11:00 PM HST**
+
+- **Tab icon in white:** the "88 x 31" tab icon now uses scoundrel.exe's white version. Removed: this page's pale blue one.
+
 ## v0.20.4 — "Calm Icon"
 **Sat Oct 31, 2026 · 10:35 PM HST**
 
