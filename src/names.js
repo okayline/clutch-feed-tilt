@@ -1,17 +1,23 @@
-// Random player names, lowercase FPS gamer tags like lagspike, mogger99 and tiltproof (ryan, Oct 21: "names like lagspike,
-// mogger99 or tiltproof"). Every player gets one when they're made or next seen: nobody is nameless, and they can reroll
-// it any time (POST /api/name).
-const WORDS = [
-  "lagspike", "tiltproof", "mogger", "clutchgod", "feedlord", "nosc0pe", "headglitch", "sweatlord", "campkid", "rushb",
-  "pingdiff", "hitreg", "wallbang", "flickshot", "aimlab", "lowfps", "highping", "respawn", "killcam", "deadeye",
-  "triggered", "salty", "toxicity", "smurfing", "bottomfrag", "topfrag", "ragequit", "rekt", "gitgud", "mainmenu",
-  "sprayhold", "peekaboo", "ninjadefuse", "lastalive", "oneshot", "twitchy", "jitterclick", "noobtube", "campfire", "frags",
+// Random player names: two words, like the other 88x31 games. The word lists are copied from the master list,
+// dungeon-items src/name-words.js (Nov 8, 2026; change them there first). Every player gets one when they're made or
+// next seen: nobody is nameless, and they can reroll it any time (POST /api/name). (Nov 8, 2026: replaces the lowercase
+// gamer tags like lagspike and tiltproof; players who already have a tag keep it until they reroll.)
+const ADJECTIVES = [
+  "Quiet", "Sleepy", "Misty", "Golden", "Silver", "Glowing", "Lucky", "Little", "Mellow", "Sunny",
+  "Drowsy", "Faint", "Distant", "Midnight", "Neon", "Pixel", "Static", "Chrome", "Analog", "Turbo",
+  "Hyper", "Mega", "Blinking", "Spinning", "Glitchy", "Fuzzy", "Cosmic", "Lunar", "Electric", "Velvet",
+  "Bubble", "Plastic", "Candy", "Laser", "Retro", "Wired", "Offline", "Lagging", "Secret", "Shiny",
 ];
-const rand2 = (rand) => String(10 + Math.floor(rand() * 90));
-// names are at most 16 characters
+const NOUNS = [
+  "Modem", "Cursor", "Floppy", "Pager", "Sprite", "Cassette", "Arcade", "Byte", "Beeper", "Satellite",
+  "Antenna", "Jukebox", "Robot", "Rocket", "Respawn", "Emoticon", "Cartridge", "Banner", "Marquee", "Joystick",
+  "Mixtape", "Webring", "Guestbook", "Keyboard", "Boombox", "Popup", "Inbox", "Desktop", "Bookmark", "Mouse",
+  "Icon", "Chip", "Signal", "Radio", "Screen", "Widget", "Cable", "Button", "Gadget", "Console",
+];
+// names are at most 16 characters, so only the pairs that fit
+const PAIRS = ADJECTIVES.flatMap((a) => NOUNS.map((n) => `${a} ${n}`)).filter((s) => s.length <= 16);
 function pick(rand) {
-  const w = WORDS[Math.floor(rand() * WORDS.length)];
-  return rand() < 0.4 ? w + rand2(rand) : w;
+  return PAIRS[Math.floor(rand() * PAIRS.length)];
 }
 
 // Give this player a random name nobody has, if they have none (or a different one, with reroll). Returns the player

@@ -2,7 +2,7 @@
 --   npx wrangler d1 execute cft-db --remote --file=schema.sql
 
 -- A player is a browser cookie. The cookie holds a random token; only its SHA-256 hash is stored.
--- Every player has a name: a random lowercase gamer tag (src/names.js).
+-- Every player has a name: two random words from the lists (src/names.js).
 CREATE TABLE IF NOT EXISTS players (
   id          INTEGER PRIMARY KEY,
   token_hash  TEXT NOT NULL UNIQUE,

@@ -4,6 +4,11 @@ Newest first. Times are Hawaii time (HST).
 
 ---
 
+## v0.20.6 — "New Names"
+**Sun Nov 8, 2026 · 10:02 PM HST**
+
+- **Two-word names:** a new or rerolled name is two words from the lists every 88x31 game will use ("Neon Modem", "Sleepy Webring"). Names you already have stay until you reroll. The squad list shows names up to 16 letters. Removed: the gamer tags (lagspike, tiltproof and the rest), and the word "ghost" after each ghost's name (no room for longer names).
+
 ## v0.20.5 — "White Icon"
 **Sat Oct 31, 2026 · 11:00 PM HST**
 

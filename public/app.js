@@ -316,13 +316,13 @@ function frame(message) {
   const rows = [
     [[" SQUAD", ""], ["            HP    K", "t"]],
     [[rule, "d"]],
-    [[" " + pad(myName || "YOU", 15).slice(0, 15), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.kills ?? "-"), "b"]],
+    [[" " + pad(myName || "YOU", 16), "b"], [hpBar, P.hp > 1 ? "b" : "e"], ["  ", ""], [String(P.kills ?? "-"), "b"]],
     // ghost teammates (up to 3), then blank rows so the minimap stays put
     ...[0, 1, 2, 3].map((i) => {
       const m = squad[i];
       if (!m) return i === 0 && !squad.length ? [[" NO GHOSTS YET TODAY", "d"]] : [[""]];
       const g = ghostAt(m), dead = g.over && !g.out;
-      return [[" " + pad(m.n, 10), dead ? "d" : m.gold ? "g" : "h"], [" ghost", "d"], [" ", ""],
+      return [[" " + pad(m.n, 16), dead ? "d" : m.gold ? "g" : "h"],
               [dead ? "DEAD " : g.out ? "OUT  " : "[" + "#".repeat(g.hp) + " ".repeat(C.HP - g.hp) + "]", dead ? "e" : "t"], ["  " + g.k, dead ? "d" : "t"]];
     }),
     [[rule, "d"]],

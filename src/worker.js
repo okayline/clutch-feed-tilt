@@ -9,7 +9,7 @@
 //   POST /api/run {day, inputs}        seal today's run on the ledger (one per player per day): the server plays it
 //                                      again from its inputs, [[tick, kind, value], ...] (corridor.js), and seals what it got
 //   GET  /api/ledger?before=ID&limit=N the chain, newest first (N up to 100): every sealed day and run, with its record and hashes
-//   POST /api/name                     reroll your name: a new random gamer tag (names can't be typed)
+//   POST /api/name                     reroll your name: two new random words (names can't be typed)
 //   GET  /api/account                  your name, save codes, passkeys and devices
 //   POST /api/codes {action, id}       "new": make a save code (shown once); "remove": forget one
 //   POST /api/load  {code}             load the player a save code belongs to on this device (log in)
